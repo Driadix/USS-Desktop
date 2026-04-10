@@ -56,8 +56,16 @@ public static class ThemeColorHelper
 
     public static MediaColor GetReadableForeground(MediaColor background)
     {
-        var luminance = ((0.299d * background.R) + (0.587d * background.G) + (0.114d * background.B)) / 255d;
-        return luminance >= 0.62d ? MediaColors.Black : MediaColors.White;
+        return GetLuminance(background) >= 0.62d ? MediaColors.Black : MediaColors.White;
+    }
+
+    public static double GetLuminance(MediaColor color) =>
+        ((0.299d * color.R) + (0.587d * color.G) + (0.114d * color.B)) / 255d;
+
+    public static MediaColor ShiftForInteraction(MediaColor color, double amount)
+    {
+        var delta = GetLuminance(color) >= 0.58d ? -amount : amount;
+        return ShiftBrightness(color, delta);
     }
 
     private static byte Adjust(byte component, double delta, double factor)

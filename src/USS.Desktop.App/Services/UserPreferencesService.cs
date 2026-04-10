@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Serilog;
 using USS.Desktop.Application;
 
 namespace USS.Desktop.App.Services;
@@ -26,6 +27,7 @@ public sealed class UserPreferencesService : ObservableObject
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         _currentSettings = await _appSettingsStore.LoadAsync(cancellationToken);
+        Log.Information("User preferences initialized. Settings={@Settings}", _currentSettings);
         RaiseStateChanged();
     }
 
@@ -58,9 +60,22 @@ public sealed class UserPreferencesService : ObservableObject
 
     private async Task SaveAsync(AppSettings settings, CancellationToken cancellationToken)
     {
+        var previousSettings = _currentSettings;
         _currentSettings = settings;
-        await _appSettingsStore.SaveAsync(settings, cancellationToken);
         RaiseStateChanged();
+
+        try
+        {
+            await _appSettingsStore.SaveAsync(settings, cancellationToken);
+            Log.Information("User preferences saved. Settings={@Settings}", settings);
+        }
+        catch (Exception exception)
+        {
+            _currentSettings = previousSettings;
+            RaiseStateChanged();
+            Log.Error(exception, "Failed to save user preferences.");
+            throw;
+        }
     }
 
     private void RaiseStateChanged()

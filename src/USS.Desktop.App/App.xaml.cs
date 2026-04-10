@@ -1,6 +1,6 @@
-using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using Serilog.Events;
 using USS.Desktop.Application;
 using USS.Desktop.App.Services;
 using USS.Desktop.App.ViewModels;
@@ -15,15 +15,22 @@ public partial class App : WpfApplication
 {
     private ServiceProvider? _serviceProvider;
 
+    public App()
+    {
+        AppLogging.WriteStartupMarker("Application instance created.");
+        RegisterGlobalExceptionLogging();
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
-
+        AppLogging.WriteStartupMarker("OnStartup entered.");
         ConfigureLogging();
-        RegisterGlobalExceptionLogging();
+        Log.Information("Startup logger configured. Runtime={@Runtime}", AppLogging.CreateRuntimeSnapshot());
 
         try
         {
+            base.OnStartup(e);
+
             Log.Information("Starting USS Desktop.");
 
             var services = new ServiceCollection();
@@ -44,15 +51,26 @@ public partial class App : WpfApplication
             services.AddSingleton<MainWindow>();
 
             _serviceProvider = services.BuildServiceProvider();
+            Log.Information("Service provider created.");
+
             var userPreferencesService = _serviceProvider.GetRequiredService<UserPreferencesService>();
             userPreferencesService.InitializeAsync().GetAwaiter().GetResult();
-            _serviceProvider.GetRequiredService<ThemeService>().ApplyCurrentTheme();
+
+            var themeService = _serviceProvider.GetRequiredService<ThemeService>();
+            themeService.ApplyCurrentTheme();
+
+            Log.Information(
+                "Startup preferences loaded. Settings={@Settings} EffectiveTheme={@EffectiveTheme}",
+                userPreferencesService.CurrentSettings,
+                themeService.GetEffectivePalette());
+
             var window = _serviceProvider.GetRequiredService<MainWindow>();
             window.Show();
             Log.Information("USS Desktop main window created.");
         }
         catch (Exception exception)
         {
+            AppLogging.WriteStartupMarker("Startup failed.", exception);
             Log.Fatal(exception, "USS Desktop failed during startup.");
             Log.CloseAndFlush();
             throw;
@@ -68,15 +86,20 @@ public partial class App : WpfApplication
 
     private static void ConfigureLogging()
     {
-        var logDirectory = Path.Combine(AppContext.BaseDirectory, "app-logs");
-        Directory.CreateDirectory(logDirectory);
-
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
+            .Enrich.WithProperty("BuildConfiguration", AppLogging.BuildConfiguration)
+            .Enrich.WithProperty("ProcessId", Environment.ProcessId)
             .WriteTo.File(
-                Path.Combine(logDirectory, "uss-desktop-.log"),
+                AppLogging.RollingLogPathPattern,
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 14,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                shared: true)
+            .WriteTo.File(
+                AppLogging.StartupLogPath,
+                restrictedToMinimumLevel: LogEventLevel.Information,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
                 shared: true)
             .CreateLogger();
     }
@@ -85,6 +108,7 @@ public partial class App : WpfApplication
     {
         DispatcherUnhandledException += (_, args) =>
         {
+            AppLogging.WriteStartupMarker("Unhandled dispatcher exception.", args.Exception);
             Log.Fatal(args.Exception, "Unhandled dispatcher exception.");
             Log.CloseAndFlush();
         };
@@ -93,10 +117,12 @@ public partial class App : WpfApplication
         {
             if (args.ExceptionObject is Exception exception)
             {
+                AppLogging.WriteStartupMarker("Unhandled AppDomain exception.", exception);
                 Log.Fatal(exception, "Unhandled AppDomain exception.");
             }
             else
             {
+                AppLogging.WriteStartupMarker("Unhandled AppDomain exception.");
                 Log.Fatal("Unhandled AppDomain exception: {ExceptionObject}", args.ExceptionObject);
             }
 

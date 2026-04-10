@@ -29,16 +29,16 @@ public sealed record AppThemePalette(
         "#F7F2E9");
 
     public static AppThemePalette DarkDefault { get; } = new(
-        "#13171C",
-        "#1C2833",
-        "#1E242C",
-        "#3B4653",
-        "#F3F5F8",
-        "#A8B3BF",
-        "#D47A46",
-        "#5E98BE",
-        "#6FB182",
-        "#D0A85E",
-        "#DB675A",
-        "#141A20");
+        "#1A2027",
+        "#22303B",
+        "#28323C",
+        "#43515D",
+        "#F4F1EA",
+        "#ACB7C2",
+        "#D68856",
+        "#73A9C7",
+        "#78A884",
+        "#D0A15A",
+        "#D96E62",
+        "#171E25");
 }

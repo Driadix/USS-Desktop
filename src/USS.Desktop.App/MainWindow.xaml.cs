@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Serilog;
 using USS.Desktop.App.ViewModels;
 using CancelEventArgs = System.ComponentModel.CancelEventArgs;
 
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
 
     private readonly MainViewModel _viewModel;
     private bool _closeApproved;
+    private bool _closeRequestInProgress;
     private bool _followLog = true;
     private bool _initialized;
     private ScrollViewer? _sessionLogScrollViewer;
@@ -47,14 +49,31 @@ public partial class MainWindow : Window
             return;
         }
 
-        e.Cancel = true;
-        if (!await _viewModel.RequestCloseAsync())
+        if (_closeRequestInProgress)
         {
+            e.Cancel = true;
             return;
         }
 
-        _closeApproved = true;
-        Close();
+        e.Cancel = true;
+        _closeRequestInProgress = true;
+
+        try
+        {
+            if (!await _viewModel.RequestCloseAsync())
+            {
+                Log.Information("Application close request cancelled.");
+                return;
+            }
+
+            _closeApproved = true;
+            Log.Information("Application close approved. Scheduling final window close.");
+            _ = Dispatcher.BeginInvoke(Close, DispatcherPriority.Background);
+        }
+        finally
+        {
+            _closeRequestInProgress = false;
+        }
     }
 
     private void OnSessionLogTextChanged(object sender, TextChangedEventArgs e)

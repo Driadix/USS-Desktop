@@ -7,42 +7,31 @@
         MinWidth="600"
         MinHeight="620"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource PageBrush}"
-        ResizeMode="CanResize">
+        Background="{DynamicResource PageBrush}"
+        ResizeMode="CanResize"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
     <Window.Resources>
         <Style x:Key="DialogCardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="16" />
             <Setter Property="Padding" Value="18" />
         </Style>
 
-        <Style x:Key="DialogButtonStyle" TargetType="Button">
+        <Style x:Key="DialogButtonStyle" TargetType="Button" BasedOn="{StaticResource AppPrimaryButtonStyle}">
             <Setter Property="Height" Value="38" />
             <Setter Property="Margin" Value="0,0,10,0" />
-            <Setter Property="Padding" Value="14,0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource PrimaryDarkBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
         </Style>
 
-        <Style x:Key="DialogSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DialogButtonStyle}">
-            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
-            <Setter Property="Background" Value="{StaticResource SecondaryBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
+        <Style x:Key="DialogSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource AppSecondaryButtonStyle}">
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Margin" Value="0,0,10,0" />
         </Style>
 
-        <Style x:Key="DialogInputStyle" TargetType="TextBox">
+        <Style x:Key="DialogInputStyle" TargetType="TextBox" BasedOn="{StaticResource AppTextBoxStyle}">
             <Setter Property="Height" Value="36" />
-            <Setter Property="Padding" Value="10,6" />
-            <Setter Property="Background" Value="{StaticResource CardAltBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
         </Style>
     </Window.Resources>
 
@@ -57,12 +46,12 @@
         <TextBlock FontFamily="Bahnschrift SemiCondensed"
                    FontSize="30"
                    FontWeight="Bold"
-                   Foreground="{StaticResource InkBrush}"
+                   Foreground="{DynamicResource InkBrush}"
                    Text="{Binding WindowTitle}" />
 
         <TextBlock Grid.Row="1"
                    Margin="0,10,0,16"
-                   Foreground="{StaticResource MutedInkBrush}"
+                   Foreground="{DynamicResource MutedInkBrush}"
                    TextWrapping="Wrap"
                    Text="{Binding DescriptionText}" />
 
@@ -80,7 +69,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock VerticalAlignment="Center"
-                                           Foreground="{StaticResource InkBrush}"
+                                           Foreground="{DynamicResource InkBrush}"
                                            Text="{Binding DisplayName}" />
 
                                 <Border Grid.Column="1"
@@ -89,7 +78,7 @@
                                         HorizontalAlignment="Left"
                                         VerticalAlignment="Center"
                                         CornerRadius="7"
-                                        BorderBrush="{StaticResource CardStrokeBrush}"
+                                        BorderBrush="{DynamicResource CardStrokeBrush}"
                                         BorderThickness="1"
                                         Background="{Binding PreviewBrush}" />
 

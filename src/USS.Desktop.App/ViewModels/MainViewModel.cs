@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Serilog;
 using USS.Desktop.Application;
 using USS.Desktop.App.Services;
 using USS.Desktop.Domain;
@@ -66,6 +68,7 @@ public partial class MainViewModel : ObservableObject
         StopCommand = new AsyncRelayCommand(StopAsync, CanStopWorkflow);
         ClearLogCommand = new RelayCommand(ClearLog);
         OpenThemeEditorCommand = new AsyncRelayCommand(OpenThemeEditorAsync);
+        OpenProjectLocationCommand = new RelayCommand(OpenProjectLocation, CanOpenProjectLocation);
         OpenRecentProjectCommand = new AsyncRelayCommand<string?>(OpenRecentProjectAsync, path => CanEditWorkspace() && !string.IsNullOrWhiteSpace(path));
 
         _userPreferencesService.SettingsChanged += OnUserPreferencesChanged;
@@ -105,6 +108,8 @@ public partial class MainViewModel : ObservableObject
     public IRelayCommand ClearLogCommand { get; }
 
     public IAsyncRelayCommand OpenThemeEditorCommand { get; }
+
+    public IRelayCommand OpenProjectLocationCommand { get; }
 
     public IAsyncRelayCommand<string?> OpenRecentProjectCommand { get; }
 
@@ -198,12 +203,16 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private SelectionOption<AppThemeMode>? _selectedThemeMode;
 
+    [ObservableProperty]
+    private string _activeOperationLabel = string.Empty;
+
     public async Task InitializeAsync()
     {
         ApplyLocalizedShellState();
         await RefreshDiagnosticsAsync();
         await LoadRecentProjectsAsync();
         AppendLog(_localization["Log.AppReady"]);
+        LogStateSnapshot("Initial UI state loaded.");
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -256,7 +265,12 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        _ = _userPreferencesService.SetThemeModeAsync(value.Value);
+        _ = ChangeThemeModeAsync(value.Value);
+    }
+
+    partial void OnSelectedProjectPathChanged(string value)
+    {
+        OpenProjectLocationCommand.NotifyCanExecuteChanged();
     }
 
     private bool CanEditWorkspace() => !IsBusy;
@@ -270,14 +284,18 @@ public partial class MainViewModel : ObservableObject
 
     private bool CanStopWorkflow() => IsBusy && _activeWorkflowCancellation is not null && !IsStoppingOperation;
 
+    private bool CanOpenProjectLocation() => Directory.Exists(SelectedProjectPath);
+
     private async Task OpenFolderAsync()
     {
         var folder = _folderPicker.PickFolder(_currentProject?.Files.ProjectDirectory);
         if (string.IsNullOrWhiteSpace(folder))
         {
+            Log.Information("Open project folder dialog cancelled.");
             return;
         }
 
+        Log.Information("Project folder selected. Folder={Folder}", folder);
         await LoadProjectAsync(folder);
     }
 
@@ -288,6 +306,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        Log.Information("Opening recent project. Folder={Folder}", folder);
         await LoadProjectAsync(folder);
     }
 
@@ -342,6 +361,7 @@ public partial class MainViewModel : ObservableObject
             ApplyProject(updatedProject);
             await AddRecentProjectAsync(updatedProject.Files.ProjectDirectory);
             await RefreshDiagnosticsAsync();
+            LogStateSnapshot("Import completed.");
         }
         catch (Exception exception)
         {
@@ -410,6 +430,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsStoppingOperation = true;
+            ProjectStatus = _localization.Format("Workflow.Status.Stopping", ActiveOperationLabel);
             await CancelActiveOperationAsync(_localization["Log.StopRequested"]);
         }
         finally
@@ -437,7 +458,9 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsBusy = true;
+            ActiveOperationLabel = actionLabel;
             SessionLog = string.Empty;
+            ProjectStatus = _localization.Format("Workflow.Status.Running", actionLabel);
             AppendLog(_localization.Format("Log.WorkflowStarted", actionLabel));
             var progress = new Progress<string>(AppendLog);
             _activeWorkflowTask = workflow(_currentProject, progress, _activeWorkflowCancellation.Token);
@@ -452,23 +475,27 @@ public partial class MainViewModel : ObservableObject
 
             _currentProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
             ApplyProject(_currentProject, preserveLog: true, resetDrafts: false);
+            LogStateSnapshot($"Workflow finished: {operationKey}.");
         }
         catch (OperationCanceledException)
         {
             ProjectStatus = _localization.Format("Log.WorkflowCancelledStatus", actionLabel);
             AppendLog(_localization.Format("Log.WorkflowCancelled", actionLabel));
             await RefreshCurrentProjectStateAsync(autoDeleteLockIfPresent: true);
+            Log.Warning("Workflow cancelled. Operation={Operation}", operationKey);
         }
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
             AppendLog(_localization.Format("Log.WorkflowFailed", actionLabel, exception.Message));
+            Log.Error(exception, "Workflow failed. Operation={Operation}", operationKey);
         }
         finally
         {
             _activeWorkflowTask = null;
             _activeWorkflowCancellation?.Dispose();
             _activeWorkflowCancellation = null;
+            ActiveOperationLabel = _localization["Actions.ActivityIdle"];
             IsBusy = false;
             await RefreshDiagnosticsAsync();
         }
@@ -489,11 +516,13 @@ public partial class MainViewModel : ObservableObject
             }
 
             AppendLog(_localization.Format("Log.ProjectOpened", project.Files.ProjectDirectory));
+            LogStateSnapshot("Project loaded.");
         }
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
             AppendLog(_localization.Format("Log.ProjectOpenFailed", exception.Message));
+            Log.Error(exception, "Project open failed. Folder={FolderPath}", folderPath);
         }
         finally
         {
@@ -564,6 +593,7 @@ public partial class MainViewModel : ObservableObject
         LockFilePath = Path.Combine(project.Files.ProjectDirectory, "build", "work", "uss.lock");
         HasLockFile = File.Exists(LockFilePath);
         DeleteLockCommand.NotifyCanExecuteChanged();
+        OpenProjectLocationCommand.NotifyCanExecuteChanged();
 
         if (!preserveLog)
         {
@@ -583,6 +613,11 @@ public partial class MainViewModel : ObservableObject
         }
 
         DiagnosticsSummary = BuildDiagnosticsSummary();
+        Log.Information(
+            "Diagnostics refreshed. ArduinoCliPath={ArduinoCliPath} PortCount={PortCount} Ports={Ports}",
+            _lastToolsetResolution.ArduinoCliPath ?? _localization["Diagnostics.NotFound"],
+            _lastPorts.Count,
+            _lastPorts.Select(port => port.Address).ToArray());
     }
 
     private string BuildDiagnosticsSummary()
@@ -639,6 +674,7 @@ public partial class MainViewModel : ObservableObject
 
     private void AppendLog(string message)
     {
+        WriteRuntimeLog(message);
         var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
         SessionLog = string.IsNullOrWhiteSpace(SessionLog) || SessionLog == _localization["Log.Empty"]
             ? line
@@ -648,6 +684,7 @@ public partial class MainViewModel : ObservableObject
     private void ClearLog()
     {
         SessionLog = string.Empty;
+        Log.Information("Run log cleared.");
     }
 
     private static IReadOnlyList<SketchLibraryReference> ParseLibraries(string rawValue)
@@ -676,19 +713,23 @@ public partial class MainViewModel : ObservableObject
     {
         if (!IsBusy)
         {
+            Log.Information("Application close requested with no active workflow.");
             return true;
         }
 
+        Log.Information("Application close requested while workflow is active. ActiveOperation={ActiveOperation}", ActiveOperationLabel);
         var confirmed = _confirmationService.Confirm(
             _localization["Confirm.Close.Title"],
             _localization["Confirm.Close.Message"]);
 
         if (!confirmed)
         {
+            Log.Information("Application close declined by user.");
             return false;
         }
 
         await CancelActiveOperationAsync(_localization["Log.ShutdownRequested"]);
+        Log.Information("Application close confirmed after cancelling active workflow.");
         return true;
     }
 
@@ -747,13 +788,40 @@ public partial class MainViewModel : ObservableObject
 
     private async Task ChangeLanguageAsync(AppLanguage language)
     {
-        await _userPreferencesService.SetLanguageAsync(language);
+        try
+        {
+            await _userPreferencesService.SetLanguageAsync(language);
+        }
+        catch (Exception exception)
+        {
+            ProjectStatus = exception.Message;
+            AppendLog(_localization.Format("Log.PreferenceUpdateFailed", exception.Message));
+            Log.Error(exception, "Language change failed. Language={Language}", language);
+        }
+    }
+
+    private async Task ChangeThemeModeAsync(AppThemeMode themeMode)
+    {
+        try
+        {
+            await _userPreferencesService.SetThemeModeAsync(themeMode);
+        }
+        catch (Exception exception)
+        {
+            ProjectStatus = exception.Message;
+            AppendLog(_localization.Format("Log.PreferenceUpdateFailed", exception.Message));
+            Log.Error(exception, "Theme mode change failed. ThemeMode={ThemeMode}", themeMode);
+        }
     }
 
     private void OnUserPreferencesChanged(object? sender, EventArgs e)
     {
         RebuildPreferenceOptions();
         ApplyLocalizedShellState();
+        Log.Information(
+            "User preferences changed. Language={Language} ThemeMode={ThemeMode}",
+            _userPreferencesService.CurrentLanguage,
+            _userPreferencesService.CurrentThemeMode);
     }
 
     private void RebuildPreferenceOptions()
@@ -793,6 +861,8 @@ public partial class MainViewModel : ObservableObject
             ImportActionLabel = _localization["Import.Action.CreateUss"];
             ImportHint = _localization["Import.Hint.Pending"];
             BootstrapFamily = _localization["Common.Unknown"];
+            ActiveOperationLabel = _localization["Actions.ActivityIdle"];
+            OpenProjectLocationCommand.NotifyCanExecuteChanged();
 
             if (string.IsNullOrWhiteSpace(SessionLog))
             {
@@ -802,6 +872,11 @@ public partial class MainViewModel : ObservableObject
         else
         {
             ApplyProject(_currentProject, preserveLog: true, resetDrafts: false);
+        }
+
+        if (!IsBusy || string.IsNullOrWhiteSpace(ActiveOperationLabel))
+        {
+            ActiveOperationLabel = _localization["Actions.ActivityIdle"];
         }
 
         DiagnosticsSummary = BuildDiagnosticsSummary();
@@ -897,4 +972,88 @@ public partial class MainViewModel : ObservableObject
         arguments.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : fallback;
+
+    private void OpenProjectLocation()
+    {
+        if (!CanOpenProjectLocation())
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = SelectedProjectPath,
+                UseShellExecute = true,
+                Verb = "open"
+            });
+
+            AppendLog(_localization.Format("Log.ProjectFolderOpened", SelectedProjectPath));
+        }
+        catch (Exception exception)
+        {
+            ProjectStatus = exception.Message;
+            AppendLog(_localization.Format("Log.ProjectFolderOpenFailed", exception.Message));
+            Log.Error(exception, "Failed to open project location. Path={Path}", SelectedProjectPath);
+        }
+    }
+
+    private void WriteRuntimeLog(string message)
+    {
+        if (message.StartsWith("CLI OUT |", StringComparison.Ordinal))
+        {
+            Log.Debug("{RunMessage}", message);
+            return;
+        }
+
+        if (message.StartsWith("CLI ERR |", StringComparison.Ordinal)
+            || message.StartsWith("CLI FAIL |", StringComparison.Ordinal))
+        {
+            Log.Warning("{RunMessage}", message);
+            return;
+        }
+
+        if (message.StartsWith("CLI CMD |", StringComparison.Ordinal)
+            || message.StartsWith("CLI EXIT |", StringComparison.Ordinal)
+            || message.StartsWith("CLI INFO |", StringComparison.Ordinal))
+        {
+            Log.Information("{RunMessage}", message);
+            return;
+        }
+
+        Log.Information("{RunMessage}", message);
+    }
+
+    private void LogStateSnapshot(string stage)
+    {
+        Log.Information("{Stage} Snapshot={@State}", stage, BuildStateSnapshot());
+    }
+
+    private object BuildStateSnapshot()
+    {
+        return new
+        {
+            Settings = _userPreferencesService.CurrentSettings,
+            SelectedProjectPath,
+            ProjectName,
+            ProjectKind,
+            ProjectFamily,
+            ActiveProfile,
+            Fqbn,
+            DiscoveryLabel,
+            ProjectStatus,
+            ActiveOperationLabel,
+            HasLockFile,
+            LockFilePath,
+            ShowImportPanel,
+            ShowBootstrapFields,
+            IsBusy,
+            IsStoppingOperation,
+            AvailablePorts = AvailablePorts.ToArray(),
+            RecentProjects = RecentProjects.ToArray(),
+            Issues = Issues.ToArray(),
+            DiagnosticsSummary
+        };
+    }
 }
