@@ -1,2 +1,11 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/USS.Desktop.App/USS.Desktop.App.csproj" />
+    <Project Path="src/USS.Desktop.Application/USS.Desktop.Application.csproj" />
+    <Project Path="src/USS.Desktop.Domain/USS.Desktop.Domain.csproj" />
+    <Project Path="src/USS.Desktop.Infrastructure/USS.Desktop.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/USS.Desktop.Tests/USS.Desktop.Tests.csproj" />
+  </Folder>
 </Solution>
