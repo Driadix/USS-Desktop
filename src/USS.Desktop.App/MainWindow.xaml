@@ -167,6 +167,34 @@
                                        Foreground="{StaticResource MutedInkBrush}"
                                        TextWrapping="Wrap"
                                        Text="{Binding ProjectStatus}" />
+
+                            <Border Margin="0,14,0,0"
+                                    Padding="12"
+                                    CornerRadius="12"
+                                    Background="#FFF5E7"
+                                    BorderBrush="#E1B17C"
+                                    BorderThickness="1"
+                                    Visibility="{Binding HasLockFile, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold"
+                                               Foreground="{StaticResource InkBrush}"
+                                               Text="Stale Lock Detected" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="{StaticResource MutedInkBrush}"
+                                               TextWrapping="Wrap"
+                                               Text="USS found build/work/uss.lock for this project. Delete it only if no compile or flash is still running." />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontFamily="Consolas"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding LockFilePath}" />
+                                    <Button Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,12,0,0"
+                                            Width="120"
+                                            Content="Delete Lock"
+                                            Command="{Binding DeleteLockCommand}" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Border>
 

@@ -28,6 +28,7 @@ public partial class App : WpfApplication
         services.AddSingleton<ISerialPortService, SerialPortService>();
         services.AddSingleton<IArduinoCliWorkflowService, ArduinoCliWorkflowService>();
         services.AddSingleton<IFolderPicker, FolderPicker>();
+        services.AddSingleton<IConfirmationService, MessageBoxConfirmationService>();
         services.AddSingleton<IRecentProjectsStore, JsonRecentProjectsStore>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();

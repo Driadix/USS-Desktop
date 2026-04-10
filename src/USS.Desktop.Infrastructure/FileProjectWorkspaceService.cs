@@ -163,6 +163,21 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
         return await OpenAsync(fullPath, cancellationToken);
     }
 
+    public Task<bool> DeleteLockFileAsync(string folderPath, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var fullPath = Path.GetFullPath(folderPath);
+        var lockFilePath = GetLockFilePath(fullPath);
+        if (!File.Exists(lockFilePath))
+        {
+            return Task.FromResult(false);
+        }
+
+        File.Delete(lockFilePath);
+        return Task.FromResult(true);
+    }
+
     private async Task<UssProjectConfiguration?> TryReadUssAsync(
         string ussPath,
         ICollection<ProjectValidationIssue> issues,
@@ -435,7 +450,7 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
             }
         }
 
-        var lockFilePath = Path.Combine(projectDirectory, "build", "work", "uss.lock");
+        var lockFilePath = GetLockFilePath(projectDirectory);
         if (File.Exists(lockFilePath))
         {
             issues.Add(new ProjectValidationIssue("project.locked", "The project has an active USS lock file in build/work/uss.lock."));
@@ -443,4 +458,7 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
 
         return issues;
     }
+
+    private static string GetLockFilePath(string projectDirectory) =>
+        Path.Combine(projectDirectory, "build", "work", "uss.lock");
 }

@@ -15,7 +15,10 @@ public partial class MainViewModel : ObservableObject
     private readonly IToolsetResolver _toolsetResolver;
     private readonly ISerialPortService _serialPortService;
     private readonly IFolderPicker _folderPicker;
+    private readonly IConfirmationService _confirmationService;
     private readonly IRecentProjectsStore _recentProjectsStore;
+    private CancellationTokenSource? _activeWorkflowCancellation;
+    private Task<WorkflowResult>? _activeWorkflowTask;
     private ProjectContext? _currentProject;
 
     public MainViewModel(
@@ -24,6 +27,7 @@ public partial class MainViewModel : ObservableObject
         IToolsetResolver toolsetResolver,
         ISerialPortService serialPortService,
         IFolderPicker folderPicker,
+        IConfirmationService confirmationService,
         IRecentProjectsStore recentProjectsStore)
     {
         _workspaceService = workspaceService;
@@ -31,11 +35,13 @@ public partial class MainViewModel : ObservableObject
         _toolsetResolver = toolsetResolver;
         _serialPortService = serialPortService;
         _folderPicker = folderPicker;
+        _confirmationService = confirmationService;
         _recentProjectsStore = recentProjectsStore;
 
         OpenFolderCommand = new AsyncRelayCommand(OpenFolderAsync, CanEditWorkspace);
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, CanEditWorkspace);
         ImportCommand = new AsyncRelayCommand(ImportAsync, CanImport);
+        DeleteLockCommand = new AsyncRelayCommand(DeleteLockAsync, CanDeleteLock);
         CompileCommand = new AsyncRelayCommand(CompileAsync, CanRunWorkflow);
         UploadCommand = new AsyncRelayCommand(UploadAsync, CanRunWorkflow);
         CompileAndUploadCommand = new AsyncRelayCommand(CompileAndUploadAsync, CanRunWorkflow);
@@ -53,6 +59,8 @@ public partial class MainViewModel : ObservableObject
     public IAsyncRelayCommand RefreshCommand { get; }
 
     public IAsyncRelayCommand ImportCommand { get; }
+
+    public IAsyncRelayCommand DeleteLockCommand { get; }
 
     public IAsyncRelayCommand CompileCommand { get; }
 
@@ -137,6 +145,12 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _showRecentProjectsEmptyState = true;
 
+    [ObservableProperty]
+    private bool _hasLockFile;
+
+    [ObservableProperty]
+    private string _lockFilePath = string.Empty;
+
     public async Task InitializeAsync()
     {
         await RefreshDiagnosticsAsync();
@@ -149,6 +163,7 @@ public partial class MainViewModel : ObservableObject
         OpenFolderCommand.NotifyCanExecuteChanged();
         RefreshCommand.NotifyCanExecuteChanged();
         ImportCommand.NotifyCanExecuteChanged();
+        DeleteLockCommand.NotifyCanExecuteChanged();
         CompileCommand.NotifyCanExecuteChanged();
         UploadCommand.NotifyCanExecuteChanged();
         CompileAndUploadCommand.NotifyCanExecuteChanged();
@@ -174,6 +189,8 @@ public partial class MainViewModel : ObservableObject
 
     private bool CanImport() =>
         !IsBusy && _currentProject is not null && (_currentProject.CanCreateUssConfiguration || _currentProject.CanBootstrapSketchProject);
+
+    private bool CanDeleteLock() => !IsBusy && _currentProject is not null && HasLockFile;
 
     private bool CanRunWorkflow() => !IsBusy && _currentProject?.CanCompile == true;
 
@@ -261,18 +278,27 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private Task CompileAsync() => RunWorkflowAsync("Compile", (project, progress) => _workflowService.CompileAsync(project, progress));
+    private Task CompileAsync() =>
+        RunWorkflowAsync("Compile", (project, progress, cancellationToken) => _workflowService.CompileAsync(project, progress, cancellationToken));
 
-    private Task UploadAsync() => RunWorkflowAsync("Upload", (project, progress) => _workflowService.UploadAsync(project, SelectedPort, progress));
+    private Task UploadAsync() =>
+        RunWorkflowAsync("Upload", (project, progress, cancellationToken) => _workflowService.UploadAsync(project, SelectedPort, progress, cancellationToken));
 
     private Task CompileAndUploadAsync() =>
-        RunWorkflowAsync("Compile + Flash", (project, progress) => _workflowService.CompileAndUploadAsync(project, SelectedPort, progress));
+        RunWorkflowAsync("Compile + Flash", (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, SelectedPort, progress, cancellationToken));
 
-    private async Task RunWorkflowAsync(
-        string actionLabel,
-        Func<ProjectContext, IProgress<string>, Task<WorkflowResult>> workflow)
+    private async Task DeleteLockAsync()
     {
-        if (_currentProject is null)
+        if (_currentProject is null || !HasLockFile)
+        {
+            return;
+        }
+
+        var confirmed = _confirmationService.Confirm(
+            "Delete USS Lock",
+            "A USS lock file is present for this project. Delete it only if no compile or flash is currently running.\r\n\r\nDelete build/work/uss.lock?");
+
+        if (!confirmed)
         {
             return;
         }
@@ -280,11 +306,42 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsBusy = true;
+            var deleted = await _workspaceService.DeleteLockFileAsync(_currentProject.Files.ProjectDirectory);
+            AppendLog(deleted
+                ? "Deleted build/work/uss.lock."
+                : "No lock file was found to delete.");
+
+            await LoadProjectAsync(_currentProject.Files.ProjectDirectory, updateRecentProjects: false);
+        }
+        catch (Exception exception)
+        {
+            ProjectStatus = exception.Message;
+            AppendLog($"Delete lock failed: {exception.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RunWorkflowAsync(
+        string actionLabel,
+        Func<ProjectContext, IProgress<string>, CancellationToken, Task<WorkflowResult>> workflow)
+    {
+        if (_currentProject is null)
+        {
+            return;
+        }
+
+        _activeWorkflowCancellation = new CancellationTokenSource();
+        try
+        {
+            IsBusy = true;
             SessionLog = string.Empty;
             AppendLog($"{actionLabel} started.");
             var progress = new Progress<string>(AppendLog);
-
-            var result = await workflow(_currentProject, progress);
+            _activeWorkflowTask = workflow(_currentProject, progress, _activeWorkflowCancellation.Token);
+            var result = await _activeWorkflowTask;
             ProjectStatus = result.Summary;
             AppendLog($"{actionLabel} finished: {result.Summary}");
 
@@ -296,6 +353,11 @@ public partial class MainViewModel : ObservableObject
             _currentProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
             ApplyProject(_currentProject, preserveLog: true);
         }
+        catch (OperationCanceledException)
+        {
+            ProjectStatus = $"{actionLabel} cancelled.";
+            AppendLog($"{actionLabel} cancelled. Active CLI processes were stopped.");
+        }
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
@@ -303,6 +365,9 @@ public partial class MainViewModel : ObservableObject
         }
         finally
         {
+            _activeWorkflowTask = null;
+            _activeWorkflowCancellation?.Dispose();
+            _activeWorkflowCancellation = null;
             IsBusy = false;
             await RefreshDiagnosticsAsync();
         }
@@ -389,6 +454,9 @@ public partial class MainViewModel : ObservableObject
         BootstrapPlatformIndexUrl = string.Empty;
         BootstrapLibraries = string.Empty;
         BootstrapFamily = "Unknown";
+        LockFilePath = Path.Combine(project.Files.ProjectDirectory, "build", "work", "uss.lock");
+        HasLockFile = File.Exists(LockFilePath);
+        DeleteLockCommand.NotifyCanExecuteChanged();
 
         if (!preserveLog)
         {
@@ -476,5 +544,35 @@ public partial class MainViewModel : ObservableObject
         }
 
         return new SketchLibraryReference(trimmed, string.Empty);
+    }
+
+    public async Task<bool> RequestCloseAsync()
+    {
+        if (!IsBusy)
+        {
+            return true;
+        }
+
+        var confirmed = _confirmationService.Confirm(
+            "Close USS Desktop",
+            "An operation is still running. If you close USS Desktop now, active compile or flash processes will be stopped and unsaved state may be lost.\r\n\r\nClose the application?");
+
+        if (!confirmed)
+        {
+            return false;
+        }
+
+        if (_activeWorkflowCancellation is not null)
+        {
+            AppendLog("Shutdown requested. Cancelling active operation.");
+            _activeWorkflowCancellation.Cancel();
+
+            if (_activeWorkflowTask is not null)
+            {
+                await Task.WhenAny(_activeWorkflowTask, Task.Delay(TimeSpan.FromSeconds(5)));
+            }
+        }
+
+        return true;
     }
 }

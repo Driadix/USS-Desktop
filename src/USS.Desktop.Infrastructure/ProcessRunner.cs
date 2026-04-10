@@ -4,8 +4,10 @@ using USS.Desktop.Application;
 
 namespace USS.Desktop.Infrastructure;
 
-public sealed class ProcessRunner : IProcessRunner
+public sealed class ProcessRunner : IProcessRunner, IDisposable
 {
+    private readonly WindowsProcessJob _processJob = new();
+
     public async Task<ProcessExecutionResult> RunAsync(
         ProcessExecutionRequest request,
         CancellationToken cancellationToken = default)
@@ -65,6 +67,8 @@ public sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException($"Failed to start process '{request.FileName}'.");
         }
 
+        _processJob.AddProcess(process.Handle);
+
         var stopwatch = Stopwatch.StartNew();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
@@ -101,5 +105,10 @@ public sealed class ProcessRunner : IProcessRunner
         catch (InvalidOperationException)
         {
         }
+    }
+
+    public void Dispose()
+    {
+        _processJob.Dispose();
     }
 }

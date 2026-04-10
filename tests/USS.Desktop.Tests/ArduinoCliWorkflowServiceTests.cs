@@ -106,6 +106,27 @@ public sealed class ArduinoCliWorkflowServiceTests
         Assert.Contains("--verify", processRunner.LastRequest.Arguments);
     }
 
+    [Fact]
+    public async Task CompileAsync_WhenCancelled_RemovesLockFile()
+    {
+        using var tempDirectory = new TestDirectory();
+        var processRunner = new BlockingProcessRunner();
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
+
+        var project = CreateManagedProject(tempDirectory.Path);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var compileTask = workflowService.CompileAsync(project, cancellationToken: cancellationTokenSource.Token);
+
+        await processRunner.Started.Task;
+        cancellationTokenSource.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => compileTask);
+        Assert.False(File.Exists(Path.Combine(tempDirectory.Path, "build", "work", "uss.lock")));
+    }
+
     private static ProjectContext CreateManagedProject(string rootPath)
     {
         Directory.CreateDirectory(rootPath);
@@ -214,6 +235,18 @@ public sealed class ArduinoCliWorkflowServiceTests
             {
                 Directory.Delete(Path, recursive: true);
             }
+        }
+    }
+
+    private sealed class BlockingProcessRunner : IProcessRunner
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ProcessExecutionResult> RunAsync(ProcessExecutionRequest request, CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new ProcessExecutionResult(0, string.Empty, string.Empty, TimeSpan.Zero);
         }
     }
 }

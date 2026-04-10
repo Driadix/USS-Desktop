@@ -13,4 +13,6 @@ public interface IProjectWorkspaceService
     Task<ProjectContext> BootstrapArduinoProjectAsync(
         BootstrapArduinoProjectRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteLockFileAsync(string folderPath, CancellationToken cancellationToken = default);
 }

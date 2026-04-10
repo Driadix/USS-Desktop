@@ -112,6 +112,21 @@ public sealed class FileProjectWorkspaceServiceTests
         Assert.Empty(project.Issues);
     }
 
+    [Fact]
+    public async Task DeleteLockFileAsync_RemovesExistingLockFile()
+    {
+        using var tempDirectory = new TestDirectory();
+        var lockFilePath = Path.Combine(tempDirectory.Path, "build", "work", "uss.lock");
+        Directory.CreateDirectory(Path.GetDirectoryName(lockFilePath)!);
+        await File.WriteAllTextAsync(lockFilePath, "locked");
+
+        var service = new FileProjectWorkspaceService();
+        var deleted = await service.DeleteLockFileAsync(tempDirectory.Path);
+
+        Assert.True(deleted);
+        Assert.False(File.Exists(lockFilePath));
+    }
+
     private sealed class TestDirectory : IDisposable
     {
         public TestDirectory()
