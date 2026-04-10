@@ -57,3 +57,19 @@ The next implementation step after this baseline is:
 2. implement the configuration model
 3. implement the first operator UI shell
 4. wire `arduino-cli` build and upload operations behind application services
+
+## Bundled Arduino CLI
+
+USS Desktop expects a pinned external toolset under `toolsets/arduino-cli-<version>-win64/`.
+
+Download the pinned Arduino CLI release:
+
+```powershell
+.\scripts\Install-ArduinoCli.ps1
+```
+
+Publish the desktop app with the bundled toolset copied next to the app output:
+
+```powershell
+.\scripts\Publish-Portable.ps1
+```

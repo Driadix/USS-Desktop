@@ -480,3 +480,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Bundled external tool payloads are downloaded locally from pinned manifests.
+toolsets/*
+!toolsets/README.md
+!toolsets/arduino-cli.manifest.json

@@ -19,7 +19,7 @@ public sealed class ArduinoCliToolsetResolver : IToolsetResolver
 
         var cliPath = FindArduinoCliPath(applicationRoot);
         var failureMessage = cliPath is null
-            ? "arduino-cli.exe was not found. Put it under toolsets/arduino-cli*/ or install it into PATH."
+            ? "arduino-cli.exe was not found. Run scripts\\Install-ArduinoCli.ps1 or bundle it under toolsets\\arduino-cli-<version>-win64\\."
             : null;
 
         return Task.FromResult(new ToolsetResolution(applicationRoot, cliPath, dataDirectory, userDirectory, failureMessage));
@@ -72,6 +72,17 @@ public sealed class ArduinoCliToolsetResolver : IToolsetResolver
     private static IEnumerable<string> GetSearchRoots(string applicationRoot)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var overrideRoot = Environment.GetEnvironmentVariable("USS_DESKTOP_TOOLSETS_ROOT");
+        if (!string.IsNullOrWhiteSpace(overrideRoot))
+        {
+            var fullOverrideRoot = Path.GetFullPath(overrideRoot);
+            if (seen.Add(fullOverrideRoot))
+            {
+                yield return fullOverrideRoot;
+            }
+        }
+
         foreach (var root in EnumerateAncestorDirectories(applicationRoot))
         {
             if (seen.Add(root))
