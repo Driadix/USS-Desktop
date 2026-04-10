@@ -63,7 +63,7 @@ public sealed class ArduinoCliWorkflowServiceTests
     }
 
     [Fact]
-    public async Task UploadAsync_WithMultiplePortsAndAutoSelection_FailsWithoutRunningCli()
+    public async Task UploadAsync_WithAutoSelection_UsesFirstDetectedPort()
     {
         using var tempDirectory = new TestDirectory();
         var processRunner = new CapturingProcessRunner(new ProcessExecutionResult(0, "upload ok", string.Empty, TimeSpan.FromSeconds(1)));
@@ -77,11 +77,35 @@ public sealed class ArduinoCliWorkflowServiceTests
             }));
 
         var project = CreateManagedProject(tempDirectory.Path);
+        var result = await workflowService.UploadAsync(project, portOverride: "AUTO");
+
+        Assert.True(result.Success);
+        Assert.NotNull(processRunner.LastRequest);
+        Assert.Contains("--port", processRunner.LastRequest!.Arguments);
+        Assert.Contains("COM3", processRunner.LastRequest.Arguments);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithoutOverride_UsesFirstDetectedPort()
+    {
+        using var tempDirectory = new TestDirectory();
+        var processRunner = new CapturingProcessRunner(new ProcessExecutionResult(0, "upload ok", string.Empty, TimeSpan.FromSeconds(1)));
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(new[]
+            {
+                new ConnectedSerialPort("COM8", "COM8"),
+                new ConnectedSerialPort("COM9", "COM9")
+            }));
+
+        var project = CreateManagedProject(tempDirectory.Path);
         var result = await workflowService.UploadAsync(project, portOverride: null);
 
-        Assert.False(result.Success);
-        Assert.Contains("serial port", result.Summary, StringComparison.OrdinalIgnoreCase);
-        Assert.Null(processRunner.LastRequest);
+        Assert.True(result.Success);
+        Assert.NotNull(processRunner.LastRequest);
+        Assert.Contains("--port", processRunner.LastRequest!.Arguments);
+        Assert.Contains("COM8", processRunner.LastRequest.Arguments);
     }
 
     [Fact]

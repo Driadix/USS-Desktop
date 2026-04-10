@@ -1,10 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Serilog;
 using USS.Desktop.App.ViewModels;
 using CancelEventArgs = System.ComponentModel.CancelEventArgs;
+using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace USS.Desktop.App;
 
@@ -90,6 +93,25 @@ public partial class MainWindow : Window
     private void OnFollowLogButtonClick(object sender, RoutedEventArgs e)
     {
         ScrollLogToEnd();
+    }
+
+    private void OnSelectorComboPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not WpfComboBox comboBox || comboBox.IsDropDownOpen || !comboBox.IsEnabled)
+        {
+            return;
+        }
+
+        comboBox.Focus();
+        comboBox.IsDropDownOpen = true;
+
+        if (comboBox.IsEditable && FindDescendant<WpfTextBox>(comboBox) is { } editableTextBox)
+        {
+            editableTextBox.Focus();
+            editableTextBox.SelectAll();
+        }
+
+        e.Handled = true;
     }
 
     private void AttachLogScrollViewer()

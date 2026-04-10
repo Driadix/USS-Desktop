@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -10,11 +11,13 @@ using USS.Desktop.Domain;
 
 namespace USS.Desktop.App.ViewModels;
 
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
     private const string CompileOperationKey = "compile";
     private const string UploadOperationKey = "upload";
     private const string CompileAndUploadOperationKey = "compile-upload";
+    private const string AutoPortSelection = "AUTO";
+    private static readonly TimeSpan PortPollingInterval = TimeSpan.FromSeconds(2);
 
     private readonly IProjectWorkspaceService _workspaceService;
     private readonly IArduinoCliWorkflowService _workflowService;
@@ -31,7 +34,10 @@ public partial class MainViewModel : ObservableObject
     private ProjectContext? _currentProject;
     private ToolsetResolution? _lastToolsetResolution;
     private IReadOnlyList<ConnectedSerialPort> _lastPorts = Array.Empty<ConnectedSerialPort>();
+    private DispatcherTimer? _portPollingTimer;
+    private bool _isRefreshingPorts;
     private bool _isSynchronizingPreferenceSelections;
+    private bool? _lastUploadPortAvailable;
 
     public MainViewModel(
         IProjectWorkspaceService workspaceService,
@@ -62,9 +68,9 @@ public partial class MainViewModel : ObservableObject
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, CanEditWorkspace);
         ImportCommand = new AsyncRelayCommand(ImportAsync, CanImport);
         DeleteLockCommand = new AsyncRelayCommand(DeleteLockAsync, CanDeleteLock);
-        CompileCommand = new AsyncRelayCommand(CompileAsync, CanRunWorkflow);
-        UploadCommand = new AsyncRelayCommand(UploadAsync, CanRunWorkflow);
-        CompileAndUploadCommand = new AsyncRelayCommand(CompileAndUploadAsync, CanRunWorkflow);
+        CompileCommand = new AsyncRelayCommand(CompileAsync, CanCompileWorkflow);
+        UploadCommand = new AsyncRelayCommand(UploadAsync, CanUploadWorkflow);
+        CompileAndUploadCommand = new AsyncRelayCommand(CompileAndUploadAsync, CanUploadWorkflow);
         StopCommand = new AsyncRelayCommand(StopAsync, CanStopWorkflow);
         ClearLogCommand = new RelayCommand(ClearLog);
         OpenThemeEditorCommand = new AsyncRelayCommand(OpenThemeEditorAsync);
@@ -144,7 +150,7 @@ public partial class MainViewModel : ObservableObject
     private string _sessionLog = string.Empty;
 
     [ObservableProperty]
-    private string _selectedPort = string.Empty;
+    private string _selectedPort = AutoPortSelection;
 
     [ObservableProperty]
     private string _importProjectName = string.Empty;
@@ -211,6 +217,7 @@ public partial class MainViewModel : ObservableObject
         ApplyLocalizedShellState();
         await RefreshDiagnosticsAsync();
         await LoadRecentProjectsAsync();
+        EnsurePortPollingStarted();
         AppendLog(_localization["Log.AppReady"]);
         LogStateSnapshot("Initial UI state loaded.");
     }
@@ -273,6 +280,12 @@ public partial class MainViewModel : ObservableObject
         OpenProjectLocationCommand.NotifyCanExecuteChanged();
     }
 
+    partial void OnSelectedPortChanged(string value)
+    {
+        UploadCommand.NotifyCanExecuteChanged();
+        CompileAndUploadCommand.NotifyCanExecuteChanged();
+    }
+
     private bool CanEditWorkspace() => !IsBusy;
 
     private bool CanImport() =>
@@ -280,7 +293,9 @@ public partial class MainViewModel : ObservableObject
 
     private bool CanDeleteLock() => !IsBusy && _currentProject is not null && HasLockFile;
 
-    private bool CanRunWorkflow() => !IsBusy && _currentProject?.CanCompile == true;
+    private bool CanCompileWorkflow() => !IsBusy && _currentProject?.CanCompile == true;
+
+    private bool CanUploadWorkflow() => CanCompileWorkflow() && IsUploadPortAvailable();
 
     private bool CanStopWorkflow() => IsBusy && _activeWorkflowCancellation is not null && !IsStoppingOperation;
 
@@ -378,10 +393,10 @@ public partial class MainViewModel : ObservableObject
         RunWorkflowAsync(CompileOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAsync(project, progress, cancellationToken));
 
     private Task UploadAsync() =>
-        RunWorkflowAsync(UploadOperationKey, (project, progress, cancellationToken) => _workflowService.UploadAsync(project, SelectedPort, progress, cancellationToken));
+        RunWorkflowAsync(UploadOperationKey, (project, progress, cancellationToken) => _workflowService.UploadAsync(project, GetPortOverrideForWorkflow(), progress, cancellationToken));
 
     private Task CompileAndUploadAsync() =>
-        RunWorkflowAsync(CompileAndUploadOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, SelectedPort, progress, cancellationToken));
+        RunWorkflowAsync(CompileAndUploadOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, GetPortOverrideForWorkflow(), progress, cancellationToken));
 
     private async Task DeleteLockAsync()
     {
@@ -608,15 +623,7 @@ public partial class MainViewModel : ObservableObject
     private async Task RefreshDiagnosticsAsync()
     {
         _lastToolsetResolution = await _toolsetResolver.ResolveAsync();
-        _lastPorts = _serialPortService.ListPorts();
-
-        AvailablePorts.Clear();
-        foreach (var port in _lastPorts)
-        {
-            AvailablePorts.Add(port.Address);
-        }
-
-        DiagnosticsSummary = BuildDiagnosticsSummary();
+        RefreshPortState(logChanges: false);
         Log.Information(
             "Diagnostics refreshed. ArduinoCliPath={ArduinoCliPath} PortCount={PortCount} Ports={Ports}",
             _lastToolsetResolution.ArduinoCliPath ?? _localization["Diagnostics.NotFound"],
@@ -644,6 +651,110 @@ public partial class MainViewModel : ObservableObject
                         ? _localization["Diagnostics.NoPorts"]
                         : string.Join(", ", _lastPorts.Select(port => port.Address)))
             });
+    }
+
+    private void EnsurePortPollingStarted()
+    {
+        if (_portPollingTimer is not null)
+        {
+            return;
+        }
+
+        _portPollingTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = PortPollingInterval
+        };
+        _portPollingTimer.Tick += OnPortPollingTick;
+        _portPollingTimer.Start();
+    }
+
+    private void OnPortPollingTick(object? sender, EventArgs e)
+    {
+        if (_isRefreshingPorts)
+        {
+            return;
+        }
+
+        try
+        {
+            _isRefreshingPorts = true;
+            RefreshPortState(logChanges: true);
+        }
+        finally
+        {
+            _isRefreshingPorts = false;
+        }
+    }
+
+    private void RefreshPortState(bool logChanges)
+    {
+        var previousPortAddresses = _lastPorts.Select(port => port.Address).ToArray();
+        _lastPorts = _serialPortService.ListPorts();
+
+        SyncAvailablePorts();
+        DiagnosticsSummary = BuildDiagnosticsSummary();
+        NotifyUploadCommandsChanged();
+
+        if (!logChanges)
+        {
+            _lastUploadPortAvailable = IsUploadPortAvailable();
+            return;
+        }
+
+        var currentPortAddresses = _lastPorts.Select(port => port.Address).ToArray();
+        if (!previousPortAddresses.SequenceEqual(currentPortAddresses, StringComparer.OrdinalIgnoreCase))
+        {
+            AppendLog(_localization.Format(
+                "Log.PortsChanged",
+                currentPortAddresses.Length == 0
+                    ? _localization["Diagnostics.NoPorts"]
+                    : string.Join(", ", currentPortAddresses)));
+        }
+
+        var uploadPortAvailable = IsUploadPortAvailable();
+        var canSurfaceUploadAvailability = _currentProject?.CanCompile == true && !IsBusy;
+        if (_lastUploadPortAvailable != uploadPortAvailable)
+        {
+            var normalizedPort = NormalizeSelectedPort(SelectedPort);
+            if (uploadPortAvailable && canSurfaceUploadAvailability)
+            {
+                AppendLog(_localization.Format(
+                    "Log.UploadPortAvailable",
+                    IsAutoPort(normalizedPort)
+                        ? AutoPortSelection
+                        : normalizedPort));
+            }
+            else if (canSurfaceUploadAvailability)
+            {
+                AppendLog(_localization.Format(
+                    "Log.UploadPortUnavailable",
+                    IsAutoPort(normalizedPort)
+                        ? AutoPortSelection
+                        : string.IsNullOrWhiteSpace(normalizedPort)
+                            ? _localization["Actions.UploadPortManual"]
+                            : normalizedPort));
+            }
+        }
+
+        _lastUploadPortAvailable = uploadPortAvailable;
+    }
+
+    private void SyncAvailablePorts()
+    {
+        var desiredPorts = new[] { AutoPortSelection }
+            .Concat(_lastPorts.Select(port => port.Address))
+            .ToArray();
+
+        if (AvailablePorts.SequenceEqual(desiredPorts, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        AvailablePorts.Clear();
+        foreach (var port in desiredPorts)
+        {
+            AvailablePorts.Add(port);
+        }
     }
 
     private async Task LoadRecentProjectsAsync()
@@ -976,6 +1087,42 @@ public partial class MainViewModel : ObservableObject
             ? value
             : fallback;
 
+    private void NotifyUploadCommandsChanged()
+    {
+        UploadCommand.NotifyCanExecuteChanged();
+        CompileAndUploadCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool IsUploadPortAvailable()
+    {
+        var normalizedPort = NormalizeSelectedPort(SelectedPort);
+        if (IsAutoPort(normalizedPort))
+        {
+            return _lastPorts.Count > 0;
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedPort))
+        {
+            return false;
+        }
+
+        return _lastPorts.Any(port => string.Equals(port.Address, normalizedPort, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string? GetPortOverrideForWorkflow()
+    {
+        var normalizedPort = NormalizeSelectedPort(SelectedPort);
+        return string.IsNullOrWhiteSpace(normalizedPort)
+            ? null
+            : normalizedPort;
+    }
+
+    private static string NormalizeSelectedPort(string? selectedPort) =>
+        selectedPort?.Trim() ?? string.Empty;
+
+    private static bool IsAutoPort(string? selectedPort) =>
+        string.Equals(selectedPort, AutoPortSelection, StringComparison.OrdinalIgnoreCase);
+
     private void OpenProjectLocation()
     {
         if (!CanOpenProjectLocation())
@@ -1053,6 +1200,8 @@ public partial class MainViewModel : ObservableObject
             ShowBootstrapFields,
             IsBusy,
             IsStoppingOperation,
+            SelectedPort,
+            UploadPortAvailable = IsUploadPortAvailable(),
             AvailablePorts = AvailablePorts.ToArray(),
             RecentProjects = RecentProjects.ToArray(),
             Issues = Issues.ToArray(),
@@ -1070,5 +1219,17 @@ public partial class MainViewModel : ObservableObject
         return _currentProject.CanCompile
             ? _localization["Actions.ActivityReady"]
             : _localization["Actions.ActivityUnavailable"];
+    }
+
+    public void Dispose()
+    {
+        _userPreferencesService.SettingsChanged -= OnUserPreferencesChanged;
+
+        if (_portPollingTimer is not null)
+        {
+            _portPollingTimer.Stop();
+            _portPollingTimer.Tick -= OnPortPollingTick;
+            _portPollingTimer = null;
+        }
     }
 }

@@ -7,6 +7,8 @@ namespace USS.Desktop.Infrastructure;
 
 public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
 {
+    private const string AutoPortSelection = "AUTO";
+
     private readonly IToolsetResolver _toolsetResolver;
     private readonly IProcessRunner _processRunner;
     private readonly ISerialPortService _serialPortService;
@@ -223,9 +225,15 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
 
     private string? ResolveUploadPort(ProjectContext project, string? portOverride)
     {
-        if (!string.IsNullOrWhiteSpace(portOverride))
+        if (!string.IsNullOrWhiteSpace(portOverride)
+            && !string.Equals(portOverride, AutoPortSelection, StringComparison.OrdinalIgnoreCase))
         {
             return portOverride.Trim();
+        }
+
+        if (string.Equals(portOverride, AutoPortSelection, StringComparison.OrdinalIgnoreCase))
+        {
+            return _serialPortService.ListPorts().FirstOrDefault()?.Address;
         }
 
         if (!string.IsNullOrWhiteSpace(project.UssConfiguration?.Upload.Port)
@@ -240,7 +248,7 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         }
 
         var ports = _serialPortService.ListPorts();
-        return ports.Count == 1 ? ports[0].Address : null;
+        return ports.FirstOrDefault()?.Address;
     }
 
     private static string EnsureDirectory(string rootPath, string relativePath)

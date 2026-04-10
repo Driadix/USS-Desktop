@@ -167,6 +167,7 @@
                                    Text="{Binding Localization[Settings.LanguageLabel]}" />
                         <ComboBox Width="132"
                                   Style="{StaticResource AppComboBoxStyle}"
+                                  PreviewMouseLeftButtonDown="OnSelectorComboPreviewMouseLeftButtonDown"
                                   ItemsSource="{Binding LanguageOptions}"
                                   SelectedItem="{Binding SelectedLanguage}"
                                   DisplayMemberPath="Label" />
@@ -178,6 +179,7 @@
                                    Text="{Binding Localization[Settings.ThemeLabel]}" />
                         <ComboBox Width="138"
                                   Style="{StaticResource AppComboBoxStyle}"
+                                  PreviewMouseLeftButtonDown="OnSelectorComboPreviewMouseLeftButtonDown"
                                   ItemsSource="{Binding ThemeModeOptions}"
                                   SelectedItem="{Binding SelectedThemeMode}"
                                   DisplayMemberPath="Label" />
@@ -497,6 +499,8 @@
                                           Grid.Column="0"
                                           Style="{StaticResource AppComboBoxStyle}"
                                           IsEditable="True"
+                                          StaysOpenOnEdit="True"
+                                          PreviewMouseLeftButtonDown="OnSelectorComboPreviewMouseLeftButtonDown"
                                           ItemsSource="{Binding AvailablePorts}"
                                           Text="{Binding SelectedPort, UpdateSourceTrigger=PropertyChanged}" />
 
