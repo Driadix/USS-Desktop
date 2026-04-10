@@ -1,5 +1,5 @@
-using System.IO;
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using USS.Desktop.Application;
@@ -10,6 +10,10 @@ namespace USS.Desktop.App.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
+    private const string CompileOperationKey = "compile";
+    private const string UploadOperationKey = "upload";
+    private const string CompileAndUploadOperationKey = "compile-upload";
+
     private readonly IProjectWorkspaceService _workspaceService;
     private readonly IArduinoCliWorkflowService _workflowService;
     private readonly IToolsetResolver _toolsetResolver;
@@ -17,9 +21,15 @@ public partial class MainViewModel : ObservableObject
     private readonly IFolderPicker _folderPicker;
     private readonly IConfirmationService _confirmationService;
     private readonly IRecentProjectsStore _recentProjectsStore;
+    private readonly LocalizationService _localization;
+    private readonly UserPreferencesService _userPreferencesService;
+    private readonly IThemeEditorDialogService _themeEditorDialogService;
     private CancellationTokenSource? _activeWorkflowCancellation;
     private Task<WorkflowResult>? _activeWorkflowTask;
     private ProjectContext? _currentProject;
+    private ToolsetResolution? _lastToolsetResolution;
+    private IReadOnlyList<ConnectedSerialPort> _lastPorts = Array.Empty<ConnectedSerialPort>();
+    private bool _isSynchronizingPreferenceSelections;
 
     public MainViewModel(
         IProjectWorkspaceService workspaceService,
@@ -28,7 +38,10 @@ public partial class MainViewModel : ObservableObject
         ISerialPortService serialPortService,
         IFolderPicker folderPicker,
         IConfirmationService confirmationService,
-        IRecentProjectsStore recentProjectsStore)
+        IRecentProjectsStore recentProjectsStore,
+        LocalizationService localization,
+        UserPreferencesService userPreferencesService,
+        IThemeEditorDialogService themeEditorDialogService)
     {
         _workspaceService = workspaceService;
         _workflowService = workflowService;
@@ -37,6 +50,11 @@ public partial class MainViewModel : ObservableObject
         _folderPicker = folderPicker;
         _confirmationService = confirmationService;
         _recentProjectsStore = recentProjectsStore;
+        _localization = localization;
+        _userPreferencesService = userPreferencesService;
+        _themeEditorDialogService = themeEditorDialogService;
+
+        Localization = localization;
 
         OpenFolderCommand = new AsyncRelayCommand(OpenFolderAsync, CanEditWorkspace);
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, CanEditWorkspace);
@@ -47,14 +65,26 @@ public partial class MainViewModel : ObservableObject
         CompileAndUploadCommand = new AsyncRelayCommand(CompileAndUploadAsync, CanRunWorkflow);
         StopCommand = new AsyncRelayCommand(StopAsync, CanStopWorkflow);
         ClearLogCommand = new RelayCommand(ClearLog);
+        OpenThemeEditorCommand = new AsyncRelayCommand(OpenThemeEditorAsync);
         OpenRecentProjectCommand = new AsyncRelayCommand<string?>(OpenRecentProjectAsync, path => CanEditWorkspace() && !string.IsNullOrWhiteSpace(path));
+
+        _userPreferencesService.SettingsChanged += OnUserPreferencesChanged;
+
+        RebuildPreferenceOptions();
+        ApplyLocalizedShellState();
     }
+
+    public LocalizationService Localization { get; }
 
     public ObservableCollection<string> Issues { get; } = new();
 
     public ObservableCollection<string> RecentProjects { get; } = new();
 
     public ObservableCollection<string> AvailablePorts { get; } = new();
+
+    public ObservableCollection<SelectionOption<AppLanguage>> LanguageOptions { get; } = new();
+
+    public ObservableCollection<SelectionOption<AppThemeMode>> ThemeModeOptions { get; } = new();
 
     public IAsyncRelayCommand OpenFolderCommand { get; }
 
@@ -74,22 +104,24 @@ public partial class MainViewModel : ObservableObject
 
     public IRelayCommand ClearLogCommand { get; }
 
+    public IAsyncRelayCommand OpenThemeEditorCommand { get; }
+
     public IAsyncRelayCommand<string?> OpenRecentProjectCommand { get; }
 
     [ObservableProperty]
-    private string _selectedProjectPath = "No project selected";
+    private string _selectedProjectPath = string.Empty;
 
     [ObservableProperty]
-    private string _projectStatus = "Open a folder to inspect Arduino project status.";
+    private string _projectStatus = string.Empty;
 
     [ObservableProperty]
-    private string _projectName = "No project";
+    private string _projectName = string.Empty;
 
     [ObservableProperty]
-    private string _projectKind = "Unknown";
+    private string _projectKind = string.Empty;
 
     [ObservableProperty]
-    private string _projectFamily = "Unknown";
+    private string _projectFamily = string.Empty;
 
     [ObservableProperty]
     private string _activeProfile = "-";
@@ -98,13 +130,13 @@ public partial class MainViewModel : ObservableObject
     private string _fqbn = "-";
 
     [ObservableProperty]
-    private string _discoveryLabel = "Idle";
+    private string _discoveryLabel = string.Empty;
 
     [ObservableProperty]
-    private string _diagnosticsSummary = "Diagnostics not loaded yet.";
+    private string _diagnosticsSummary = string.Empty;
 
     [ObservableProperty]
-    private string _sessionLog = "Session log will appear here.";
+    private string _sessionLog = string.Empty;
 
     [ObservableProperty]
     private string _selectedPort = string.Empty;
@@ -131,7 +163,7 @@ public partial class MainViewModel : ObservableObject
     private string _bootstrapLibraries = string.Empty;
 
     [ObservableProperty]
-    private string _bootstrapFamily = "Unknown";
+    private string _bootstrapFamily = string.Empty;
 
     [ObservableProperty]
     private bool _showImportPanel;
@@ -140,10 +172,10 @@ public partial class MainViewModel : ObservableObject
     private bool _showBootstrapFields;
 
     [ObservableProperty]
-    private string _importActionLabel = "Create uss.yaml";
+    private string _importActionLabel = string.Empty;
 
     [ObservableProperty]
-    private string _importHint = "Import actions will appear after opening a project.";
+    private string _importHint = string.Empty;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -160,11 +192,18 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isStoppingOperation;
 
+    [ObservableProperty]
+    private SelectionOption<AppLanguage>? _selectedLanguage;
+
+    [ObservableProperty]
+    private SelectionOption<AppThemeMode>? _selectedThemeMode;
+
     public async Task InitializeAsync()
     {
+        ApplyLocalizedShellState();
         await RefreshDiagnosticsAsync();
         await LoadRecentProjectsAsync();
-        AppendLog("Application ready.");
+        AppendLog(_localization["Log.AppReady"]);
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -188,7 +227,7 @@ public partial class MainViewModel : ObservableObject
     partial void OnBootstrapFqbnChanged(string value)
     {
         var family = ProjectFamilyDetector.FromFqbn(value);
-        BootstrapFamily = family.ToDisplayName();
+        BootstrapFamily = LocalizeProjectFamily(family);
 
         if (string.IsNullOrWhiteSpace(BootstrapPlatformIdentifier))
         {
@@ -198,6 +237,26 @@ public partial class MainViewModel : ObservableObject
                 BootstrapPlatformIdentifier = $"{segments[0]}:{segments[1]}";
             }
         }
+    }
+
+    partial void OnSelectedLanguageChanged(SelectionOption<AppLanguage>? value)
+    {
+        if (_isSynchronizingPreferenceSelections || value is null || value.Value == _userPreferencesService.CurrentLanguage)
+        {
+            return;
+        }
+
+        _ = ChangeLanguageAsync(value.Value);
+    }
+
+    partial void OnSelectedThemeModeChanged(SelectionOption<AppThemeMode>? value)
+    {
+        if (_isSynchronizingPreferenceSelections || value is null || value.Value == _userPreferencesService.CurrentThemeMode)
+        {
+            return;
+        }
+
+        _ = _userPreferencesService.SetThemeModeAsync(value.Value);
     }
 
     private bool CanEditWorkspace() => !IsBusy;
@@ -242,6 +301,7 @@ public partial class MainViewModel : ObservableObject
         {
             await RefreshDiagnosticsAsync();
             await LoadRecentProjectsAsync();
+            ApplyLocalizedShellState();
         }
     }
 
@@ -255,7 +315,6 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsBusy = true;
-
             ProjectContext updatedProject;
             if (_currentProject.CanBootstrapSketchProject)
             {
@@ -270,14 +329,14 @@ public partial class MainViewModel : ObservableObject
                         BootstrapPlatformIndexUrl,
                         ParseLibraries(BootstrapLibraries)));
 
-                AppendLog($"Bootstrapped sketch.yaml and uss.yaml in {_currentProject.Files.ProjectDirectory}.");
+                AppendLog(_localization.Format("Log.ImportBootstrapped", _currentProject.Files.ProjectDirectory));
             }
             else
             {
                 updatedProject = await _workspaceService.CreateUssConfigurationAsync(
                     new CreateUssConfigurationRequest(_currentProject.Files.ProjectDirectory, ImportProjectName));
 
-                AppendLog($"Created uss.yaml in {_currentProject.Files.ProjectDirectory}.");
+                AppendLog(_localization.Format("Log.ImportCreated", _currentProject.Files.ProjectDirectory));
             }
 
             ApplyProject(updatedProject);
@@ -287,7 +346,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
-            AppendLog($"Import failed: {exception.Message}");
+            AppendLog(_localization.Format("Log.ImportFailed", exception.Message));
         }
         finally
         {
@@ -296,13 +355,13 @@ public partial class MainViewModel : ObservableObject
     }
 
     private Task CompileAsync() =>
-        RunWorkflowAsync("Compile", (project, progress, cancellationToken) => _workflowService.CompileAsync(project, progress, cancellationToken));
+        RunWorkflowAsync(CompileOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAsync(project, progress, cancellationToken));
 
     private Task UploadAsync() =>
-        RunWorkflowAsync("Upload", (project, progress, cancellationToken) => _workflowService.UploadAsync(project, SelectedPort, progress, cancellationToken));
+        RunWorkflowAsync(UploadOperationKey, (project, progress, cancellationToken) => _workflowService.UploadAsync(project, SelectedPort, progress, cancellationToken));
 
     private Task CompileAndUploadAsync() =>
-        RunWorkflowAsync("Compile + Flash", (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, SelectedPort, progress, cancellationToken));
+        RunWorkflowAsync(CompileAndUploadOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, SelectedPort, progress, cancellationToken));
 
     private async Task DeleteLockAsync()
     {
@@ -312,8 +371,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         var confirmed = _confirmationService.Confirm(
-            "Delete USS Lock",
-            "A USS lock file is present for this project. Delete it only if no compile or flash is currently running.\r\n\r\nDelete build/work/uss.lock?");
+            _localization["Confirm.DeleteLock.Title"],
+            _localization["Confirm.DeleteLock.Message"]);
 
         if (!confirmed)
         {
@@ -325,15 +384,15 @@ public partial class MainViewModel : ObservableObject
             IsBusy = true;
             var deleted = await _workspaceService.DeleteLockFileAsync(_currentProject.Files.ProjectDirectory);
             AppendLog(deleted
-                ? "Deleted build/work/uss.lock."
-                : "No lock file was found to delete.");
+                ? _localization["Log.DeleteLockDeleted"]
+                : _localization["Log.DeleteLockMissing"]);
 
             await LoadProjectAsync(_currentProject.Files.ProjectDirectory, updateRecentProjects: false);
         }
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
-            AppendLog($"Delete lock failed: {exception.Message}");
+            AppendLog(_localization.Format("Log.DeleteLockFailed", exception.Message));
         }
         finally
         {
@@ -351,7 +410,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsStoppingOperation = true;
-            await CancelActiveOperationAsync("Stop requested. Cancelling active operation.");
+            await CancelActiveOperationAsync(_localization["Log.StopRequested"]);
         }
         finally
         {
@@ -359,8 +418,13 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task OpenThemeEditorAsync()
+    {
+        await _themeEditorDialogService.OpenAsync();
+    }
+
     private async Task RunWorkflowAsync(
-        string actionLabel,
+        string operationKey,
         Func<ProjectContext, IProgress<string>, CancellationToken, Task<WorkflowResult>> workflow)
     {
         if (_currentProject is null)
@@ -368,36 +432,37 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        var actionLabel = LocalizeWorkflowAction(operationKey);
         _activeWorkflowCancellation = new CancellationTokenSource();
         try
         {
             IsBusy = true;
             SessionLog = string.Empty;
-            AppendLog($"{actionLabel} started.");
+            AppendLog(_localization.Format("Log.WorkflowStarted", actionLabel));
             var progress = new Progress<string>(AppendLog);
             _activeWorkflowTask = workflow(_currentProject, progress, _activeWorkflowCancellation.Token);
             var result = await _activeWorkflowTask;
-            ProjectStatus = result.Summary;
-            AppendLog($"{actionLabel} finished: {result.Summary}");
+            ProjectStatus = LocalizeWorkflowSummary(operationKey, result);
+            AppendLog(_localization.Format("Log.WorkflowFinished", actionLabel, ProjectStatus));
 
             if (!string.IsNullOrWhiteSpace(result.LogFilePath))
             {
-                AppendLog($"Project log: {result.LogFilePath}");
+                AppendLog(_localization.Format("Log.ProjectLogPath", result.LogFilePath));
             }
 
             _currentProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
-            ApplyProject(_currentProject, preserveLog: true);
+            ApplyProject(_currentProject, preserveLog: true, resetDrafts: false);
         }
         catch (OperationCanceledException)
         {
-            ProjectStatus = $"{actionLabel} cancelled.";
-            AppendLog($"{actionLabel} cancelled. Active CLI processes were stopped.");
+            ProjectStatus = _localization.Format("Log.WorkflowCancelledStatus", actionLabel);
+            AppendLog(_localization.Format("Log.WorkflowCancelled", actionLabel));
             await RefreshCurrentProjectStateAsync(autoDeleteLockIfPresent: true);
         }
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
-            AppendLog($"{actionLabel} failed: {exception.Message}");
+            AppendLog(_localization.Format("Log.WorkflowFailed", actionLabel, exception.Message));
         }
         finally
         {
@@ -423,12 +488,12 @@ public partial class MainViewModel : ObservableObject
                 await AddRecentProjectAsync(project.Files.ProjectDirectory);
             }
 
-            AppendLog($"Opened {project.Files.ProjectDirectory}.");
+            AppendLog(_localization.Format("Log.ProjectOpened", project.Files.ProjectDirectory));
         }
         catch (Exception exception)
         {
             ProjectStatus = exception.Message;
-            AppendLog($"Open failed: {exception.Message}");
+            AppendLog(_localization.Format("Log.ProjectOpenFailed", exception.Message));
         }
         finally
         {
@@ -436,89 +501,109 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void ApplyProject(ProjectContext project, bool preserveLog = false)
+    private void ApplyProject(ProjectContext project, bool preserveLog = false, bool resetDrafts = true)
     {
         _currentProject = project;
         SelectedProjectPath = project.Files.ProjectDirectory;
         ProjectName = project.DisplayName;
-        ProjectKind = project.UssConfiguration?.Project.Kind ?? (project.SketchConfiguration is not null ? "arduino" : "unknown");
-        ProjectFamily = project.Family.ToDisplayName();
+        ProjectKind = LocalizeProjectKind(project.UssConfiguration?.Project.Kind, project.SketchConfiguration is not null);
+        ProjectFamily = LocalizeProjectFamily(project.Family);
         ActiveProfile = project.ActiveProfileName ?? "-";
         Fqbn = project.ActiveProfile?.Fqbn ?? "-";
         DiscoveryLabel = project.DiscoveryKind switch
         {
-            ProjectDiscoveryKind.ManagedProject => "Managed USS Project",
-            ProjectDiscoveryKind.SketchProjectNeedsImport => "Sketch Requires USS Import",
-            ProjectDiscoveryKind.SketchFolderNeedsBootstrap => "Sketch Folder Requires Bootstrap",
-            _ => "Unsupported Folder"
+            ProjectDiscoveryKind.ManagedProject => _localization["Project.Discovery.Managed"],
+            ProjectDiscoveryKind.SketchProjectNeedsImport => _localization["Project.Discovery.SketchNeedsImport"],
+            ProjectDiscoveryKind.SketchFolderNeedsBootstrap => _localization["Project.Discovery.SketchNeedsBootstrap"],
+            _ => _localization["Project.Discovery.Unsupported"]
         };
 
         ProjectStatus = project.DiscoveryKind switch
         {
-            ProjectDiscoveryKind.ManagedProject when project.HasIssues => "Project opened with validation issues.",
-            ProjectDiscoveryKind.ManagedProject => "Project is ready for compile and flash.",
-            ProjectDiscoveryKind.SketchProjectNeedsImport => "sketch.yaml found. Create uss.yaml to manage this folder in USS.",
-            ProjectDiscoveryKind.SketchFolderNeedsBootstrap => "Arduino sketch detected. Bootstrap sketch.yaml and uss.yaml to make it deterministic.",
-            _ => "This folder is not supported by USS v1."
+            ProjectDiscoveryKind.ManagedProject when project.HasIssues => _localization["Project.Status.ManagedIssues"],
+            ProjectDiscoveryKind.ManagedProject => _localization["Project.Status.ManagedReady"],
+            ProjectDiscoveryKind.SketchProjectNeedsImport => _localization["Project.Status.SketchNeedsImport"],
+            ProjectDiscoveryKind.SketchFolderNeedsBootstrap => _localization["Project.Status.SketchNeedsBootstrap"],
+            _ => _localization["Project.Status.Unsupported"]
         };
 
         Issues.Clear();
         if (project.Issues.Count == 0)
         {
-            Issues.Add("No validation issues.");
+            Issues.Add(_localization["Validation.None"]);
         }
         else
         {
             foreach (var issue in project.Issues)
             {
-                Issues.Add(issue.Message);
+                Issues.Add(LocalizeValidationIssue(issue));
             }
         }
 
         ShowImportPanel = project.CanCreateUssConfiguration || project.CanBootstrapSketchProject;
         ShowBootstrapFields = project.CanBootstrapSketchProject;
-        ImportActionLabel = project.CanBootstrapSketchProject ? "Create sketch.yaml + uss.yaml" : "Create uss.yaml";
+        ImportActionLabel = project.CanBootstrapSketchProject
+            ? _localization["Import.Action.Bootstrap"]
+            : _localization["Import.Action.CreateUss"];
         ImportHint = project.CanBootstrapSketchProject
-            ? "Provide the pinned Arduino profile details for this sketch folder."
-            : "USS can generate uss.yaml from the existing sketch.yaml profile.";
+            ? _localization["Import.Hint.Bootstrap"]
+            : _localization["Import.Hint.Import"];
 
-        ImportProjectName = project.DisplayName;
-        BootstrapProfileName = "main";
-        BootstrapFqbn = string.Empty;
-        BootstrapPlatformIdentifier = string.Empty;
-        BootstrapPlatformVersion = string.Empty;
-        BootstrapPlatformIndexUrl = string.Empty;
-        BootstrapLibraries = string.Empty;
-        BootstrapFamily = "Unknown";
+        if (resetDrafts)
+        {
+            ImportProjectName = project.DisplayName;
+            BootstrapProfileName = "main";
+            BootstrapFqbn = string.Empty;
+            BootstrapPlatformIdentifier = string.Empty;
+            BootstrapPlatformVersion = string.Empty;
+            BootstrapPlatformIndexUrl = string.Empty;
+            BootstrapLibraries = string.Empty;
+        }
+
+        BootstrapFamily = LocalizeProjectFamily(ProjectFamilyDetector.FromFqbn(BootstrapFqbn));
         LockFilePath = Path.Combine(project.Files.ProjectDirectory, "build", "work", "uss.lock");
         HasLockFile = File.Exists(LockFilePath);
         DeleteLockCommand.NotifyCanExecuteChanged();
 
         if (!preserveLog)
         {
-            SessionLog = $"Opened {project.DisplayName}.{Environment.NewLine}{ProjectStatus}";
+            SessionLog = $"{_localization.Format("Log.ProjectOpenedName", project.DisplayName)}{Environment.NewLine}{ProjectStatus}";
         }
     }
 
     private async Task RefreshDiagnosticsAsync()
     {
-        var toolset = await _toolsetResolver.ResolveAsync();
-        var ports = _serialPortService.ListPorts();
+        _lastToolsetResolution = await _toolsetResolver.ResolveAsync();
+        _lastPorts = _serialPortService.ListPorts();
 
         AvailablePorts.Clear();
-        foreach (var port in ports)
+        foreach (var port in _lastPorts)
         {
             AvailablePorts.Add(port.Address);
         }
 
-        DiagnosticsSummary = string.Join(
+        DiagnosticsSummary = BuildDiagnosticsSummary();
+    }
+
+    private string BuildDiagnosticsSummary()
+    {
+        if (_lastToolsetResolution is null)
+        {
+            return _localization["Diagnostics.NotLoaded"];
+        }
+
+        return string.Join(
             Environment.NewLine,
             new[]
             {
-                $"Arduino CLI: {toolset.ArduinoCliPath ?? "Not found"}",
-                $"CLI data dir: {toolset.ArduinoDataDirectory}",
-                $"CLI user dir: {toolset.ArduinoUserDirectory}",
-                $"Ports: {(ports.Count == 0 ? "none detected" : string.Join(", ", ports.Select(port => port.Address)))}"
+                _localization.Format("Diagnostics.CliPath", _lastToolsetResolution.ArduinoCliPath ?? _localization["Diagnostics.NotFound"]),
+                _localization.Format("Diagnostics.CliData", _lastToolsetResolution.ArduinoDataDirectory),
+                _localization.Format("Diagnostics.CliUser", _lastToolsetResolution.ArduinoUserDirectory),
+                _localization.Format(
+                    "Diagnostics.Ports",
+                    _lastPorts.Count == 0
+                        ? _localization["Diagnostics.NoPorts"]
+                        : string.Join(", ", _lastPorts.Select(port => port.Address)))
             });
     }
 
@@ -555,7 +640,7 @@ public partial class MainViewModel : ObservableObject
     private void AppendLog(string message)
     {
         var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-        SessionLog = string.IsNullOrWhiteSpace(SessionLog) || SessionLog == "Session log will appear here."
+        SessionLog = string.IsNullOrWhiteSpace(SessionLog) || SessionLog == _localization["Log.Empty"]
             ? line
             : $"{SessionLog}{Environment.NewLine}{line}";
     }
@@ -595,16 +680,15 @@ public partial class MainViewModel : ObservableObject
         }
 
         var confirmed = _confirmationService.Confirm(
-            "Close USS Desktop",
-            "An operation is still running. If you close USS Desktop now, active compile or flash processes will be stopped and unsaved state may be lost.\r\n\r\nClose the application?");
+            _localization["Confirm.Close.Title"],
+            _localization["Confirm.Close.Message"]);
 
         if (!confirmed)
         {
             return false;
         }
 
-        await CancelActiveOperationAsync("Shutdown requested. Cancelling active operation.");
-
+        await CancelActiveOperationAsync(_localization["Log.ShutdownRequested"]);
         return true;
     }
 
@@ -642,22 +726,175 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var refreshedProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
-            ApplyProject(refreshedProject, preserveLog: true);
+            ApplyProject(refreshedProject, preserveLog: true, resetDrafts: false);
 
             if (autoDeleteLockIfPresent && HasLockFile)
             {
                 var deleted = await _workspaceService.DeleteLockFileAsync(_currentProject.Files.ProjectDirectory);
                 if (deleted)
                 {
-                    AppendLog("Deleted build/work/uss.lock after cancellation.");
+                    AppendLog(_localization["Log.LockDeletedAfterCancel"]);
                     refreshedProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
-                    ApplyProject(refreshedProject, preserveLog: true);
+                    ApplyProject(refreshedProject, preserveLog: true, resetDrafts: false);
                 }
             }
         }
         catch (Exception exception)
         {
-            AppendLog($"Project refresh failed: {exception.Message}");
+            AppendLog(_localization.Format("Log.ProjectRefreshFailed", exception.Message));
         }
     }
+
+    private async Task ChangeLanguageAsync(AppLanguage language)
+    {
+        await _userPreferencesService.SetLanguageAsync(language);
+    }
+
+    private void OnUserPreferencesChanged(object? sender, EventArgs e)
+    {
+        RebuildPreferenceOptions();
+        ApplyLocalizedShellState();
+    }
+
+    private void RebuildPreferenceOptions()
+    {
+        _isSynchronizingPreferenceSelections = true;
+        try
+        {
+            LanguageOptions.Clear();
+            LanguageOptions.Add(new SelectionOption<AppLanguage>(AppLanguage.English, _localization["Settings.LanguageEnglish"]));
+            LanguageOptions.Add(new SelectionOption<AppLanguage>(AppLanguage.Russian, _localization["Settings.LanguageRussian"]));
+            SelectedLanguage = LanguageOptions.First(option => option.Value == _userPreferencesService.CurrentLanguage);
+
+            ThemeModeOptions.Clear();
+            ThemeModeOptions.Add(new SelectionOption<AppThemeMode>(AppThemeMode.Light, _localization["Settings.ThemeLight"]));
+            ThemeModeOptions.Add(new SelectionOption<AppThemeMode>(AppThemeMode.Dark, _localization["Settings.ThemeDark"]));
+            ThemeModeOptions.Add(new SelectionOption<AppThemeMode>(AppThemeMode.Custom, _localization["Settings.ThemeCustom"]));
+            SelectedThemeMode = ThemeModeOptions.First(option => option.Value == _userPreferencesService.CurrentThemeMode);
+        }
+        finally
+        {
+            _isSynchronizingPreferenceSelections = false;
+        }
+    }
+
+    private void ApplyLocalizedShellState()
+    {
+        if (_currentProject is null)
+        {
+            SelectedProjectPath = _localization["Project.SelectedNone"];
+            ProjectStatus = _localization["Project.Status.NoSelection"];
+            ProjectName = _localization["Project.Name.None"];
+            ProjectKind = _localization["Common.Unknown"];
+            ProjectFamily = _localization["Common.Unknown"];
+            ActiveProfile = "-";
+            Fqbn = "-";
+            DiscoveryLabel = _localization["Project.Discovery.Idle"];
+            ImportActionLabel = _localization["Import.Action.CreateUss"];
+            ImportHint = _localization["Import.Hint.Pending"];
+            BootstrapFamily = _localization["Common.Unknown"];
+
+            if (string.IsNullOrWhiteSpace(SessionLog))
+            {
+                SessionLog = _localization["Log.Empty"];
+            }
+        }
+        else
+        {
+            ApplyProject(_currentProject, preserveLog: true, resetDrafts: false);
+        }
+
+        DiagnosticsSummary = BuildDiagnosticsSummary();
+    }
+
+    private string LocalizeProjectFamily(ProjectFamily family) =>
+        family switch
+        {
+            USS.Desktop.Domain.ProjectFamily.Esp32 => _localization["Project.Family.Esp32"],
+            USS.Desktop.Domain.ProjectFamily.Stm32 => _localization["Project.Family.Stm32"],
+            _ => _localization["Common.Unknown"]
+        };
+
+    private string LocalizeProjectKind(string? kind, bool hasSketchConfiguration)
+    {
+        if (string.Equals(kind, "arduino", StringComparison.OrdinalIgnoreCase) || hasSketchConfiguration)
+        {
+            return _localization["Project.Kind.Arduino"];
+        }
+
+        return string.IsNullOrWhiteSpace(kind) ? _localization["Common.Unknown"] : kind;
+    }
+
+    private string LocalizeValidationIssue(ProjectValidationIssue issue)
+    {
+        var arguments = issue.Arguments ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return issue.Code switch
+        {
+            "uss.parse" => _localization.Format("Validation.uss.parse", GetArgument(arguments, "error", issue.Message)),
+            "sketch.parse" => _localization.Format("Validation.sketch.parse", GetArgument(arguments, "error", issue.Message)),
+            "uss.version" => _localization.Format("Validation.uss.version", GetArgument(arguments, "version", issue.Message)),
+            "uss.kind" => _localization.Format("Validation.uss.kind", GetArgument(arguments, "kind", issue.Message)),
+            "sketch.missing" => _localization["Validation.sketch.missing"],
+            "profile.missing" => _localization["Validation.profile.missing"],
+            "profile.not-found" => _localization.Format("Validation.profile.not-found", GetArgument(arguments, "profile", issue.Message)),
+            "fqbn.missing" => _localization.Format("Validation.fqbn.missing", GetArgument(arguments, "profile", issue.Message)),
+            "family.unsupported" => _localization.Format("Validation.family.unsupported", GetArgument(arguments, "fqbn", issue.Message)),
+            "family.mismatch" => _localization.Format(
+                "Validation.family.mismatch",
+                GetArgument(arguments, "declaredFamily", issue.Message),
+                GetArgument(arguments, "detectedFamily", issue.Message)),
+            "project.locked" => _localization["Validation.project.locked"],
+            _ => issue.Message
+        };
+    }
+
+    private string LocalizeWorkflowAction(string operationKey) =>
+        operationKey switch
+        {
+            CompileOperationKey => _localization["Workflow.Action.Compile"],
+            UploadOperationKey => _localization["Workflow.Action.Upload"],
+            CompileAndUploadOperationKey => _localization["Workflow.Action.CompileAndUpload"],
+            _ => operationKey
+        };
+
+    private string LocalizeWorkflowSummary(string operationKey, WorkflowResult result)
+    {
+        if (result.Success)
+        {
+            return operationKey switch
+            {
+                CompileOperationKey => _localization["Workflow.Summary.CompileSuccess"],
+                UploadOperationKey => _localization["Workflow.Summary.UploadSuccess"],
+                CompileAndUploadOperationKey => _localization["Workflow.Summary.CompileAndUploadSuccess"],
+                _ => result.Summary
+            };
+        }
+
+        if (result.ExitCode is { } exitCode)
+        {
+            return operationKey switch
+            {
+                CompileOperationKey => _localization.Format("Workflow.Summary.CompileFailedExit", exitCode),
+                UploadOperationKey => _localization.Format("Workflow.Summary.UploadFailedExit", exitCode),
+                CompileAndUploadOperationKey => _localization.Format("Workflow.Summary.CompileAndUploadFailedExit", exitCode),
+                _ => result.Summary
+            };
+        }
+
+        return result.Summary switch
+        {
+            "arduino-cli is not available." => _localization["Workflow.Summary.ToolUnavailable"],
+            "The project is already busy." => _localization["Workflow.Summary.ProjectBusy"],
+            "A serial port is required for upload." => _localization["Workflow.Summary.PortRequired"],
+            "uss.yaml is required." => _localization["Workflow.Summary.UssRequired"],
+            "No active sketch profile is available." => _localization["Workflow.Summary.ProfileMissing"],
+            "Project validation failed." => _localization["Workflow.Summary.ValidationFailed"],
+            _ => result.Summary
+        };
+    }
+
+    private static string GetArgument(IReadOnlyDictionary<string, string> arguments, string key, string fallback) =>
+        arguments.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
 }

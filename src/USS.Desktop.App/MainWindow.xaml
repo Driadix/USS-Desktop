@@ -5,30 +5,20 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="USS Desktop"
-        Width="1440"
+        Width="1460"
         Height="920"
         MinWidth="1220"
-        MinHeight="760"
+        MinHeight="720"
         WindowStartupLocation="CenterScreen"
-        Background="#F2ECE2">
+        Background="{StaticResource PageBrush}">
     <Window.Resources>
-        <SolidColorBrush x:Key="PageBrush" Color="#F2ECE2" />
-        <SolidColorBrush x:Key="InkBrush" Color="#18212B" />
-        <SolidColorBrush x:Key="MutedInkBrush" Color="#5B6672" />
-        <SolidColorBrush x:Key="CardBrush" Color="#FFFDF9" />
-        <SolidColorBrush x:Key="CardStrokeBrush" Color="#DCCFBC" />
-        <SolidColorBrush x:Key="PrimaryBrush" Color="#C5642F" />
-        <SolidColorBrush x:Key="PrimaryDarkBrush" Color="#94441C" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#233647" />
-        <SolidColorBrush x:Key="SuccessBrush" Color="#55735A" />
-
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="18" />
-            <Setter Property="Padding" Value="20" />
-            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,0,0,14" />
         </Style>
 
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
@@ -48,353 +38,289 @@
         </Style>
 
         <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource PrimaryDarkBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="14,10" />
-            <Setter Property="Margin" Value="0,0,10,10" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Cursor" Value="Hand" />
         </Style>
 
         <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-            <Setter Property="Background" Value="#F8F1E8" />
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource SecondaryBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
         </Style>
 
         <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-            <Setter Property="Background" Value="#BE3D2F" />
-            <Setter Property="BorderBrush" Value="#8F2B20" />
+            <Setter Property="Foreground" Value="{StaticResource DangerTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource DangerDarkBrush}" />
         </Style>
 
         <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="38" />
             <Setter Property="Margin" Value="0,0,0,12" />
-            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Background" Value="{StaticResource CardAltBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
-            <Setter Property="Background" Value="#FFFDF9" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
 
-        <Style x:Key="ReadOnlyBoxStyle" TargetType="TextBox" BasedOn="{StaticResource InputStyle}">
-            <Setter Property="IsReadOnly" Value="True" />
-            <Setter Property="Background" Value="#F8F5EF" />
+        <Style x:Key="SurfaceBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardAltBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
+        <Style x:Key="OverlayIconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="Foreground" Value="{StaticResource OverlayArrowBrush}" />
+            <Setter Property="Opacity" Value="0.8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource OverlayArrowHoverBrush}" />
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid Margin="26">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
-                    CornerRadius="24"
-                    Padding="26"
-                    Background="{StaticResource AccentBrush}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel>
-                        <TextBlock FontFamily="Bahnschrift SemiCondensed"
-                                   FontSize="34"
-                                   FontWeight="Bold"
-                                   Foreground="#FFF7EF"
-                                   Text="USS Desktop" />
-                        <TextBlock Margin="0,8,0,0"
-                                   FontSize="14"
-                                   Foreground="#D6E1EA"
-                                   Text="Deterministic Arduino compile and flash workflows for non-IDE operators." />
-                    </StackPanel>
-
-                    <Border Grid.Column="1"
-                            Background="#1AFFFFFF"
-                            CornerRadius="16"
-                            Padding="18,12">
-                        <StackPanel>
-                            <TextBlock Foreground="#D6E1EA"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       Text="CURRENT STATUS" />
-                            <TextBlock Margin="0,4,0,0"
-                                       Width="320"
-                                       TextWrapping="Wrap"
-                                       Foreground="White"
-                                       FontSize="15"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding ProjectStatus}" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </Border>
-
-            <Grid Grid.Row="1" Margin="0,20,0,0">
+        <Border Grid.Row="0"
+                Margin="0,0,0,16"
+                Padding="18"
+                CornerRadius="20"
+                Background="{StaticResource ChromeBrush}">
+            <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="390" />
-                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0">
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Project" />
+                <TextBlock FontFamily="Bahnschrift SemiCondensed"
+                           FontSize="34"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource AccentTextBrush}"
+                           VerticalAlignment="Center"
+                           Text="USS Desktop" />
 
-                            <WrapPanel Margin="0,0,0,8">
-                                <Button Style="{StaticResource PrimaryButtonStyle}"
-                                        Width="150"
-                                        Content="Open Folder"
-                                        Command="{Binding OpenFolderCommand}" />
-                                <Button Style="{StaticResource SecondaryButtonStyle}"
-                                        Width="120"
-                                        Content="Refresh"
-                                        Command="{Binding RefreshCommand}" />
-                            </WrapPanel>
+                <Border Grid.Column="1"
+                        Margin="18,0"
+                        Padding="16,12"
+                        CornerRadius="14"
+                        Background="{StaticResource ChromeSurfaceBrush}">
+                    <StackPanel>
+                        <TextBlock Foreground="{StaticResource AccentTextBrush}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding Localization[Header.CurrentStatus]}" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Width="460"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource AccentTextBrush}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding ProjectStatus}" />
+                    </StackPanel>
+                </Border>
 
-                            <TextBlock Style="{StaticResource CaptionStyle}" Text="Folder" />
-                            <TextBox Style="{StaticResource ReadOnlyBoxStyle}"
-                                     Text="{Binding SelectedProjectPath}"
-                                     TextWrapping="Wrap" />
-
-                            <TextBlock Style="{StaticResource CaptionStyle}" Text="Detection" />
-                            <TextBlock FontSize="18"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource InkBrush}"
-                                       Text="{Binding DiscoveryLabel}" />
-
-                            <TextBlock Margin="0,12,0,0"
-                                       Foreground="{StaticResource MutedInkBrush}"
-                                       TextWrapping="Wrap"
-                                       Text="{Binding ProjectStatus}" />
-
-                            <Border Margin="0,14,0,0"
-                                    Padding="12"
-                                    CornerRadius="12"
-                                    Background="#FFF5E7"
-                                    BorderBrush="#E1B17C"
-                                    BorderThickness="1"
-                                    Visibility="{Binding HasLockFile, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <StackPanel>
-                                    <TextBlock FontWeight="SemiBold"
-                                               Foreground="{StaticResource InkBrush}"
-                                               Text="Stale Lock Detected" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource MutedInkBrush}"
-                                               TextWrapping="Wrap"
-                                               Text="USS found build/work/uss.lock for this project. Delete it only if no compile or flash is still running." />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontFamily="Consolas"
-                                               FontSize="11"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding LockFilePath}" />
-                                    <Button Style="{StaticResource SecondaryButtonStyle}"
-                                            Margin="0,12,0,0"
-                                            Width="120"
-                                            Content="Delete Lock"
-                                            Command="{Binding DeleteLockCommand}" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Style="{StaticResource CardStyle}"
-                            Visibility="{Binding ShowImportPanel, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Import / Bootstrap" />
-                            <TextBlock Foreground="{StaticResource MutedInkBrush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,14"
-                                       Text="{Binding ImportHint}" />
-
-                            <TextBlock Style="{StaticResource CaptionStyle}" Text="Project Name" />
-                            <TextBox Style="{StaticResource InputStyle}"
-                                     Text="{Binding ImportProjectName, UpdateSourceTrigger=PropertyChanged}" />
-
-                            <StackPanel Visibility="{Binding ShowBootstrapFields, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Profile Name" />
-                                <TextBox Style="{StaticResource InputStyle}"
-                                         Text="{Binding BootstrapProfileName, UpdateSourceTrigger=PropertyChanged}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="FQBN" />
-                                <TextBox Style="{StaticResource InputStyle}"
-                                         Text="{Binding BootstrapFqbn, UpdateSourceTrigger=PropertyChanged}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Detected Family" />
-                                <TextBox Style="{StaticResource ReadOnlyBoxStyle}"
-                                         Text="{Binding BootstrapFamily}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Platform Identifier" />
-                                <TextBox Style="{StaticResource InputStyle}"
-                                         Text="{Binding BootstrapPlatformIdentifier, UpdateSourceTrigger=PropertyChanged}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Platform Version" />
-                                <TextBox Style="{StaticResource InputStyle}"
-                                         Text="{Binding BootstrapPlatformVersion, UpdateSourceTrigger=PropertyChanged}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Platform Index URL" />
-                                <TextBox Style="{StaticResource InputStyle}"
-                                         Text="{Binding BootstrapPlatformIndexUrl, UpdateSourceTrigger=PropertyChanged}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Pinned Libraries, one per line" />
-                                <TextBox Style="{StaticResource InputStyle}"
-                                         Height="94"
-                                         AcceptsReturn="True"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Text="{Binding BootstrapLibraries, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-
-                            <Button Style="{StaticResource PrimaryButtonStyle}"
-                                    Margin="0,4,0,0"
-                                    Width="210"
-                                    Content="{Binding ImportActionLabel}"
-                                    Command="{Binding ImportCommand}" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Recent Projects" />
-                            <ItemsControl ItemsSource="{Binding RecentProjects}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Style="{StaticResource SecondaryButtonStyle}"
-                                                Margin="0,0,0,8"
-                                                HorizontalContentAlignment="Left"
-                                                Command="{Binding DataContext.OpenRecentProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}">
-                                            <TextBlock Text="{Binding}" TextWrapping="Wrap" />
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <TextBlock Foreground="{StaticResource MutedInkBrush}"
-                                       Visibility="{Binding ShowRecentProjectsEmptyState, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                       Text="Use Open Folder to populate recent projects." />
-                        </StackPanel>
-                    </Border>
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Style="{StaticResource CaptionStyle}"
+                                   Foreground="{StaticResource AccentTextBrush}"
+                                   Text="{Binding Localization[Settings.LanguageLabel]}" />
+                        <ComboBox Width="120"
+                                  Height="36"
+                                  Padding="8,4"
+                                  ItemsSource="{Binding LanguageOptions}"
+                                  SelectedItem="{Binding SelectedLanguage}"
+                                  DisplayMemberPath="Label" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Style="{StaticResource CaptionStyle}"
+                                   Foreground="{StaticResource AccentTextBrush}"
+                                   Text="{Binding Localization[Settings.ThemeLabel]}" />
+                        <ComboBox Width="130"
+                                  Height="36"
+                                  Padding="8,4"
+                                  ItemsSource="{Binding ThemeModeOptions}"
+                                  SelectedItem="{Binding SelectedThemeMode}"
+                                  DisplayMemberPath="Label" />
+                    </StackPanel>
+                    <Button Width="150"
+                            Margin="0,18,0,0"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="{Binding Localization[Settings.CustomizeTheme]}"
+                            Command="{Binding OpenThemeEditorCommand}" />
                 </StackPanel>
+            </Grid>
+        </Border>
 
-                <StackPanel Grid.Column="2">
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="430" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
                     <Border Style="{StaticResource CardStyle}">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.15*" />
-                                <ColumnDefinition Width="20" />
-                                <ColumnDefinition Width="0.85*" />
-                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Actions" />
-                                <WrapPanel Margin="0,0,0,10">
-                                    <Button Style="{StaticResource PrimaryButtonStyle}"
-                                            Width="140"
-                                            Content="Compile"
-                                            Command="{Binding CompileCommand}" />
-                                    <Button Style="{StaticResource SecondaryButtonStyle}"
-                                            Width="140"
-                                            Content="Flash"
-                                            Command="{Binding UploadCommand}" />
-                                    <Button Style="{StaticResource SecondaryButtonStyle}"
-                                            Width="170"
-                                            Content="Compile + Flash"
-                                            Command="{Binding CompileAndUploadCommand}" />
-                                    <Button Style="{StaticResource DangerButtonStyle}"
-                                            Width="120"
-                                            Content="Stop"
-                                            Command="{Binding StopCommand}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                           Text="{Binding Localization[Project.Section]}" />
+
+                                <WrapPanel Grid.Column="1">
+                                    <Button Width="120"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Content="{Binding Localization[Project.OpenFolder]}"
+                                            Command="{Binding OpenFolderCommand}" />
+                                    <Button Width="100"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Content="{Binding Localization[Project.Refresh]}"
+                                            Command="{Binding RefreshCommand}" />
                                 </WrapPanel>
+                            </Grid>
 
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Upload Port Override" />
-                                <ComboBox Margin="0,0,0,10"
-                                          Padding="8"
-                                          Height="38"
-                                          IsEditable="True"
-                                          ItemsSource="{Binding AvailablePorts}"
-                                          Text="{Binding SelectedPort, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Foreground="{StaticResource MutedInkBrush}"
-                                           Text="Leave the port blank to let USS auto-select a single connected COM port." />
+                            <StackPanel Grid.Row="1">
+                                <TextBlock Style="{StaticResource CaptionStyle}"
+                                           Text="{Binding Localization[Project.Folder]}" />
+                                <Border Style="{StaticResource SurfaceBorderStyle}">
+                                    <TextBlock TextWrapping="Wrap" Text="{Binding SelectedProjectPath}" />
+                                </Border>
 
-                                <Border Margin="0,18,0,0"
-                                        Padding="12"
-                                        CornerRadius="14"
-                                        Background="#F8F1E8"
-                                        BorderBrush="{StaticResource CardStrokeBrush}"
-                                        BorderThickness="1">
-                                    <TextBlock TextWrapping="Wrap"
-                                               Foreground="{StaticResource InkBrush}"
-                                               Text="{Binding ProjectStatus}" />
+                                <TextBlock Style="{StaticResource CaptionStyle}"
+                                           Text="{Binding Localization[Project.Detection]}" />
+                                <Border Style="{StaticResource SurfaceBorderStyle}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding DiscoveryLabel}" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Foreground="{StaticResource MutedInkBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding ProjectStatus}" />
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
 
-                            <Border Grid.Column="2"
-                                    Padding="16"
-                                    CornerRadius="16"
-                                    Background="#F6F8FA"
-                                    BorderBrush="{StaticResource CardStrokeBrush}"
-                                    BorderThickness="1">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Diagnostics" />
-                                    <TextBox Style="{StaticResource ReadOnlyBoxStyle}"
-                                             AcceptsReturn="True"
-                                             Text="{Binding DiagnosticsSummary}"
-                                             TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,18,0,0"
-                                               Foreground="{StaticResource SuccessBrush}"
-                                               FontWeight="SemiBold"
-                                               Text="{Binding IsBusy, StringFormat=Busy: {0}}" />
-                                </StackPanel>
-                            </Border>
+                            <Grid Grid.Row="2" Margin="0,2,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource SurfaceBorderStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Project.NameLabel]}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding ProjectName}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource SurfaceBorderStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Project.KindLabel]}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding ProjectKind}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource SurfaceBorderStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Project.FamilyLabel]}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding ProjectFamily}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource SurfaceBorderStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Project.ActiveProfileLabel]}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding ActiveProfile}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="2" Grid.ColumnSpan="3" Style="{StaticResource SurfaceBorderStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Project.FqbnLabel]}" />
+                                        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Fqbn}" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
                         </Grid>
                     </Border>
 
                     <Border Style="{StaticResource CardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1*" />
-                                <ColumnDefinition Width="24" />
-                                <ColumnDefinition Width="1*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Project Details" />
+                            <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                       Text="{Binding Localization[Health.Section]}" />
 
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Name" />
-                                <TextBox Style="{StaticResource ReadOnlyBoxStyle}" Text="{Binding ProjectName}" />
+                            <Button Grid.Column="1"
+                                    Width="118"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Visibility="{Binding HasLockFile, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Content="{Binding Localization[Health.DeleteLock]}"
+                                    Command="{Binding DeleteLockCommand}" />
 
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Kind" />
-                                <TextBox Style="{StaticResource ReadOnlyBoxStyle}" Text="{Binding ProjectKind}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Family" />
-                                <TextBox Style="{StaticResource ReadOnlyBoxStyle}" Text="{Binding ProjectFamily}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Active Profile" />
-                                <TextBox Style="{StaticResource ReadOnlyBoxStyle}" Text="{Binding ActiveProfile}" />
-
-                                <TextBlock Style="{StaticResource CaptionStyle}" Text="FQBN" />
-                                <TextBox Style="{StaticResource ReadOnlyBoxStyle}"
-                                         Text="{Binding Fqbn}"
-                                         TextWrapping="Wrap" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Validation" />
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
+                                <TextBlock Margin="0,0,0,10"
+                                           Foreground="{StaticResource MutedInkBrush}"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding HasLockFile, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                           Text="{Binding LockFilePath}" />
                                 <ItemsControl ItemsSource="{Binding Issues}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Margin="0,0,0,10"
-                                                    Padding="12"
-                                                    CornerRadius="12"
-                                                    Background="#FBF7F1"
-                                                    BorderBrush="{StaticResource CardStrokeBrush}"
-                                                    BorderThickness="1">
-                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                            <Border Style="{StaticResource SurfaceBorderStyle}">
+                                                <TextBlock TextWrapping="Wrap" Text="{Binding}" />
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -403,53 +329,184 @@
                         </Grid>
                     </Border>
 
-                    <Border Style="{StaticResource CardStyle}" Margin="0,0,0,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-
-                            <Grid Grid.Row="0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Run Log" />
-
-                                <WrapPanel Grid.Column="1" Margin="0,0,0,8">
-                                    <Button Style="{StaticResource SecondaryButtonStyle}"
-                                            Width="110"
-                                            Content="Clear"
-                                            Command="{Binding ClearLogCommand}" />
-                                </WrapPanel>
-                            </Grid>
-
-                            <Grid Grid.Row="1">
-                                <TextBox x:Name="SessionLogTextBox"
-                                         Height="300"
+                    <Border Style="{StaticResource CardStyle}"
+                            Visibility="{Binding ShowImportPanel, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{Binding Localization[Import.Section]}" />
+                            <TextBlock Margin="0,0,0,12"
+                                       Foreground="{StaticResource MutedInkBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ImportHint}" />
+                            <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.ProjectName]}" />
+                            <TextBox Style="{StaticResource InputStyle}" Text="{Binding ImportProjectName, UpdateSourceTrigger=PropertyChanged}" />
+                            <StackPanel Visibility="{Binding ShowBootstrapFields, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.ProfileName]}" />
+                                <TextBox Style="{StaticResource InputStyle}" Text="{Binding BootstrapProfileName, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.Fqbn]}" />
+                                <TextBox Style="{StaticResource InputStyle}" Text="{Binding BootstrapFqbn, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.DetectedFamily]}" />
+                                <Border Style="{StaticResource SurfaceBorderStyle}">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding BootstrapFamily}" />
+                                </Border>
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.PlatformIdentifier]}" />
+                                <TextBox Style="{StaticResource InputStyle}" Text="{Binding BootstrapPlatformIdentifier, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.PlatformVersion]}" />
+                                <TextBox Style="{StaticResource InputStyle}" Text="{Binding BootstrapPlatformVersion, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.PlatformIndexUrl]}" />
+                                <TextBox Style="{StaticResource InputStyle}" Text="{Binding BootstrapPlatformIndexUrl, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Import.PinnedLibraries]}" />
+                                <TextBox Style="{StaticResource InputStyle}"
+                                         Height="94"
                                          AcceptsReturn="True"
-                                         IsReadOnly="True"
                                          VerticalScrollBarVisibility="Auto"
-                                         HorizontalScrollBarVisibility="Auto"
-                                         TextWrapping="Wrap"
-                                         Text="{Binding SessionLog}" />
-                                <Button x:Name="FollowLogButton"
-                                        Width="92"
-                                        Height="34"
-                                        Margin="0,0,12,12"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Bottom"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Visibility="Collapsed"
-                                        Content="↓ Live"
-                                        Click="OnFollowLogButtonClick" />
-                            </Grid>
-                        </Grid>
+                                         Text="{Binding BootstrapLibraries, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <Button Width="220"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Content="{Binding ImportActionLabel}"
+                                    Command="{Binding ImportCommand}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{Binding Localization[Recent.Section]}" />
+                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding RecentProjects}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource SecondaryButtonStyle}"
+                                                    HorizontalContentAlignment="Left"
+                                                    Content="{Binding}"
+                                                    Command="{Binding DataContext.OpenRecentProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Foreground="{StaticResource MutedInkBrush}"
+                                       Visibility="{Binding ShowRecentProjectsEmptyState, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       Text="{Binding Localization[Recent.Empty]}" />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
+            </ScrollViewer>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.15*" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="0.85*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{Binding Localization[Actions.Section]}" />
+                            <UniformGrid Rows="1" Columns="3" Margin="0,0,0,12">
+                                <Button Margin="0,0,10,0" Style="{StaticResource PrimaryButtonStyle}" Content="{Binding Localization[Actions.Compile]}" Command="{Binding CompileCommand}" />
+                                <Button Margin="0,0,10,0" Style="{StaticResource SecondaryButtonStyle}" Content="{Binding Localization[Actions.Flash]}" Command="{Binding UploadCommand}" />
+                                <Button Margin="0" Style="{StaticResource SecondaryButtonStyle}" Content="{Binding Localization[Actions.CompileAndFlash]}" Command="{Binding CompileAndUploadCommand}" />
+                            </UniformGrid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="190" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionStyle}" Text="{Binding Localization[Actions.UploadPort]}" />
+                                    <ComboBox Height="38"
+                                              Padding="8,4"
+                                              Margin="0,0,12,0"
+                                              IsEditable="True"
+                                              ItemsSource="{Binding AvailablePorts}"
+                                              Text="{Binding SelectedPort, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               Foreground="{StaticResource MutedInkBrush}"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding Localization[Actions.UploadPortHint]}" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Height="46"
+                                        Margin="12,18,0,0"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Content="{Binding Localization[Actions.Stop]}"
+                                        Command="{Binding StopCommand}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{Binding Localization[Diagnostics.Section]}" />
+                            <TextBox Style="{StaticResource InputStyle}"
+                                     Height="152"
+                                     Margin="0"
+                                     IsReadOnly="True"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     TextWrapping="Wrap"
+                                     Text="{Binding DiagnosticsSummary}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{Binding Localization[Log.Section]}" />
+                            <Button Grid.Column="1"
+                                    Width="100"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="{Binding Localization[Log.Clear]}"
+                                    Command="{Binding ClearLogCommand}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <TextBox x:Name="SessionLogTextBox"
+                                     Margin="0,2,0,0"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     Background="{StaticResource LogBackgroundBrush}"
+                                     BorderBrush="{StaticResource LogBorderBrush}"
+                                     BorderThickness="1"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     TextWrapping="Wrap"
+                                     Text="{Binding SessionLog}" />
+                            <Button x:Name="FollowLogButton"
+                                    Width="32"
+                                    Height="32"
+                                    Margin="0,0,18,18"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Bottom"
+                                    Panel.ZIndex="1"
+                                    Style="{StaticResource OverlayIconButtonStyle}"
+                                    ToolTip="{Binding Localization[Log.FollowTooltip]}"
+                                    Visibility="Collapsed"
+                                    Content="↓"
+                                    Click="OnFollowLogButtonClick" />
+                        </Grid>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
-    </ScrollViewer>
+    </Grid>
 </Window>
