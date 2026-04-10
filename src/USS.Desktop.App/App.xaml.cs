@@ -27,13 +27,21 @@ public partial class App : WpfApplication
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<ISerialPortService, SerialPortService>();
         services.AddSingleton<IArduinoCliWorkflowService, ArduinoCliWorkflowService>();
+        services.AddSingleton<IAppSettingsStore, JsonAppSettingsStore>();
         services.AddSingleton<IFolderPicker, FolderPicker>();
         services.AddSingleton<IConfirmationService, MessageBoxConfirmationService>();
         services.AddSingleton<IRecentProjectsStore, JsonRecentProjectsStore>();
+        services.AddSingleton<IThemeEditorDialogService, ThemeEditorDialogService>();
+        services.AddSingleton<UserPreferencesService>();
+        services.AddSingleton<LocalizationService>();
+        services.AddSingleton<ThemeService>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 
         _serviceProvider = services.BuildServiceProvider();
+        var userPreferencesService = _serviceProvider.GetRequiredService<UserPreferencesService>();
+        userPreferencesService.InitializeAsync().GetAwaiter().GetResult();
+        _serviceProvider.GetRequiredService<ThemeService>().ApplyCurrentTheme();
         var window = _serviceProvider.GetRequiredService<MainWindow>();
         window.Show();
     }

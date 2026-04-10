@@ -194,7 +194,13 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
         }
         catch (Exception exception)
         {
-            issues.Add(new ProjectValidationIssue("uss.parse", $"uss.yaml could not be parsed: {exception.Message}"));
+            issues.Add(new ProjectValidationIssue(
+                "uss.parse",
+                $"uss.yaml could not be parsed: {exception.Message}",
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["error"] = exception.Message
+                }));
             return null;
         }
     }
@@ -215,7 +221,13 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
         }
         catch (Exception exception)
         {
-            issues.Add(new ProjectValidationIssue("sketch.parse", $"sketch.yaml could not be parsed: {exception.Message}"));
+            issues.Add(new ProjectValidationIssue(
+                "sketch.parse",
+                $"sketch.yaml could not be parsed: {exception.Message}",
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["error"] = exception.Message
+                }));
             return null;
         }
     }
@@ -400,12 +412,24 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
         {
             if (ussConfiguration.Version != 1)
             {
-                issues.Add(new ProjectValidationIssue("uss.version", $"Unsupported uss.yaml version '{ussConfiguration.Version}'."));
+                issues.Add(new ProjectValidationIssue(
+                    "uss.version",
+                    $"Unsupported uss.yaml version '{ussConfiguration.Version}'.",
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["version"] = ussConfiguration.Version.ToString()
+                    }));
             }
 
             if (!string.Equals(ussConfiguration.Project.Kind, "arduino", StringComparison.OrdinalIgnoreCase))
             {
-                issues.Add(new ProjectValidationIssue("uss.kind", $"Unsupported project kind '{ussConfiguration.Project.Kind}'."));
+                issues.Add(new ProjectValidationIssue(
+                    "uss.kind",
+                    $"Unsupported project kind '{ussConfiguration.Project.Kind}'.",
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["kind"] = ussConfiguration.Project.Kind
+                    }));
             }
         }
 
@@ -421,21 +445,39 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
 
         if (sketchConfiguration is not null && activeProfileName is not null && activeProfile is null)
         {
-            issues.Add(new ProjectValidationIssue("profile.not-found", $"Profile '{activeProfileName}' does not exist in sketch.yaml."));
+            issues.Add(new ProjectValidationIssue(
+                "profile.not-found",
+                $"Profile '{activeProfileName}' does not exist in sketch.yaml.",
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["profile"] = activeProfileName
+                }));
         }
 
         if (activeProfile is not null)
         {
             if (string.IsNullOrWhiteSpace(activeProfile.Fqbn))
             {
-                issues.Add(new ProjectValidationIssue("fqbn.missing", $"Profile '{activeProfile.Name}' is missing an fqbn."));
+                issues.Add(new ProjectValidationIssue(
+                    "fqbn.missing",
+                    $"Profile '{activeProfile.Name}' is missing an fqbn.",
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["profile"] = activeProfile.Name
+                    }));
             }
             else
             {
                 var inferredFamily = ProjectFamilyDetector.FromFqbn(activeProfile.Fqbn);
                 if (inferredFamily == ProjectFamily.Unknown)
                 {
-                    issues.Add(new ProjectValidationIssue("family.unsupported", $"FQBN '{activeProfile.Fqbn}' is not supported in v1."));
+                    issues.Add(new ProjectValidationIssue(
+                        "family.unsupported",
+                        $"FQBN '{activeProfile.Fqbn}' is not supported in v1.",
+                        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["fqbn"] = activeProfile.Fqbn
+                        }));
                 }
 
                 if (ussConfiguration is not null
@@ -445,7 +487,12 @@ public sealed class FileProjectWorkspaceService : IProjectWorkspaceService
                 {
                     issues.Add(new ProjectValidationIssue(
                         "family.mismatch",
-                        $"uss.yaml declares family '{ussConfiguration.Project.Family.ToDisplayName()}' but sketch.yaml resolves to '{inferredFamily.ToDisplayName()}'."));
+                        $"uss.yaml declares family '{ussConfiguration.Project.Family.ToDisplayName()}' but sketch.yaml resolves to '{inferredFamily.ToDisplayName()}'.",
+                        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["declaredFamily"] = ussConfiguration.Project.Family.ToDisplayName(),
+                            ["detectedFamily"] = inferredFamily.ToDisplayName()
+                        }));
                 }
             }
         }
