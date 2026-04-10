@@ -261,14 +261,16 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private Task CompileAsync() => RunWorkflowAsync("Compile", project => _workflowService.CompileAsync(project));
+    private Task CompileAsync() => RunWorkflowAsync("Compile", (project, progress) => _workflowService.CompileAsync(project, progress));
 
-    private Task UploadAsync() => RunWorkflowAsync("Upload", project => _workflowService.UploadAsync(project, SelectedPort));
+    private Task UploadAsync() => RunWorkflowAsync("Upload", (project, progress) => _workflowService.UploadAsync(project, SelectedPort, progress));
 
     private Task CompileAndUploadAsync() =>
-        RunWorkflowAsync("Compile + Flash", project => _workflowService.CompileAndUploadAsync(project, SelectedPort));
+        RunWorkflowAsync("Compile + Flash", (project, progress) => _workflowService.CompileAndUploadAsync(project, SelectedPort, progress));
 
-    private async Task RunWorkflowAsync(string actionLabel, Func<ProjectContext, Task<WorkflowResult>> workflow)
+    private async Task RunWorkflowAsync(
+        string actionLabel,
+        Func<ProjectContext, IProgress<string>, Task<WorkflowResult>> workflow)
     {
         if (_currentProject is null)
         {
@@ -278,11 +280,12 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsBusy = true;
+            SessionLog = string.Empty;
             AppendLog($"{actionLabel} started.");
+            var progress = new Progress<string>(AppendLog);
 
-            var result = await workflow(_currentProject);
+            var result = await workflow(_currentProject, progress);
             ProjectStatus = result.Summary;
-            SessionLog = result.Transcript;
             AppendLog($"{actionLabel} finished: {result.Summary}");
 
             if (!string.IsNullOrWhiteSpace(result.LogFilePath))

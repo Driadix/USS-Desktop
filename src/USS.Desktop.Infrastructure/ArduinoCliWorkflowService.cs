@@ -21,27 +21,32 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         _serialPortService = serialPortService;
     }
 
-    public Task<WorkflowResult> CompileAsync(ProjectContext project, CancellationToken cancellationToken = default) =>
-        ExecuteAsync("compile", project, null, cancellationToken);
+    public Task<WorkflowResult> CompileAsync(
+        ProjectContext project,
+        IProgress<string>? outputProgress = null,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync("compile", project, null, outputProgress, cancellationToken);
 
     public Task<WorkflowResult> UploadAsync(
         ProjectContext project,
         string? portOverride,
+        IProgress<string>? outputProgress = null,
         CancellationToken cancellationToken = default) =>
-        ExecuteAsync("upload", project, portOverride, cancellationToken);
+        ExecuteAsync("upload", project, portOverride, outputProgress, cancellationToken);
 
     public async Task<WorkflowResult> CompileAndUploadAsync(
         ProjectContext project,
         string? portOverride,
+        IProgress<string>? outputProgress = null,
         CancellationToken cancellationToken = default)
     {
-        var compileResult = await CompileAsync(project, cancellationToken);
+        var compileResult = await CompileAsync(project, outputProgress, cancellationToken);
         if (!compileResult.Success)
         {
             return compileResult with { OperationName = "compile + upload" };
         }
 
-        var uploadResult = await UploadAsync(project, portOverride, cancellationToken);
+        var uploadResult = await UploadAsync(project, portOverride, outputProgress, cancellationToken);
         return uploadResult with
         {
             OperationName = "compile + upload",
@@ -55,21 +60,25 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         string operationName,
         ProjectContext project,
         string? portOverride,
+        IProgress<string>? outputProgress,
         CancellationToken cancellationToken)
     {
         var readinessFailure = Validate(project, operationName);
         if (readinessFailure is not null)
         {
+            ReportFailure(readinessFailure, outputProgress);
             return readinessFailure;
         }
 
         var toolset = await _toolsetResolver.ResolveAsync(cancellationToken);
         if (!toolset.IsAvailable || toolset.ArduinoCliPath is null)
         {
-            return WorkflowResult.Failure(
+            var failure = WorkflowResult.Failure(
                 operationName,
                 "arduino-cli is not available.",
                 toolset.FailureMessage ?? "arduino-cli.exe could not be found. Add it under toolsets/ or install it into PATH.");
+            ReportFailure(failure, outputProgress);
+            return failure;
         }
 
         var artifacts = project.UssConfiguration!.Artifacts;
@@ -92,10 +101,12 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         var arguments = BuildArguments(operationName, project, buildPath, outputDirectory, portOverride);
         if (arguments is null)
         {
-            return WorkflowResult.Failure(
+            var failure = WorkflowResult.Failure(
                 operationName,
                 "A serial port is required for upload.",
                 "No upload port could be resolved. Connect a board or choose a specific COM port.");
+            ReportFailure(failure, outputProgress);
+            return failure;
         }
 
         var request = new ProcessExecutionRequest(
@@ -106,9 +117,11 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
             {
                 ["ARDUINO_DIRECTORIES_DATA"] = toolset.ArduinoDataDirectory,
                 ["ARDUINO_DIRECTORIES_USER"] = toolset.ArduinoUserDirectory
-            });
+            },
+            CreateProcessOutputProgress(outputProgress));
 
         var commandLine = $"{toolset.ArduinoCliPath} {string.Join(" ", arguments.Select(QuoteArgument))}";
+        outputProgress?.Report($"CLI CMD | {commandLine}");
 
         await File.WriteAllTextAsync(
             lockFilePath,
@@ -120,6 +133,7 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
             var result = await _processRunner.RunAsync(request, cancellationToken);
             var transcript = BuildTranscript(operationName, project, request, commandLine, result);
             await File.WriteAllTextAsync(logFilePath, transcript, cancellationToken);
+            outputProgress?.Report($"CLI EXIT | code {result.ExitCode}");
 
             var summary = result.ExitCode == 0
                 ? $"{operationName} completed successfully."
@@ -273,4 +287,32 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         argument.Contains(' ', StringComparison.Ordinal)
             ? $"\"{argument}\""
             : argument;
+
+    private static IProgress<ProcessOutputLine>? CreateProcessOutputProgress(IProgress<string>? outputProgress)
+    {
+        if (outputProgress is null)
+        {
+            return null;
+        }
+
+        return new Progress<ProcessOutputLine>(line =>
+        {
+            var prefix = line.Kind == ProcessOutputKind.StandardError ? "CLI ERR" : "CLI OUT";
+            outputProgress.Report($"{prefix} | {line.Text}");
+        });
+    }
+
+    private static void ReportFailure(WorkflowResult failure, IProgress<string>? outputProgress)
+    {
+        if (outputProgress is null)
+        {
+            return;
+        }
+
+        outputProgress.Report($"CLI FAIL | {failure.Summary}");
+        foreach (var line in failure.Transcript.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            outputProgress.Report($"CLI INFO | {line}");
+        }
+    }
 }

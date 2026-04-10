@@ -34,6 +34,35 @@ public sealed class ArduinoCliWorkflowServiceTests
     }
 
     [Fact]
+    public async Task CompileAsync_ReportsLiveArduinoCliOutputWithPrefixes()
+    {
+        using var tempDirectory = new TestDirectory();
+        var processRunner = new CapturingProcessRunner(
+            new ProcessExecutionResult(0, "compile ok", "warning text", TimeSpan.FromSeconds(1)),
+            request =>
+            {
+                request.OutputProgress?.Report(new ProcessOutputLine(ProcessOutputKind.StandardOutput, "Detecting libraries"));
+                request.OutputProgress?.Report(new ProcessOutputLine(ProcessOutputKind.StandardError, "warning: deprecated"));
+            });
+
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
+
+        var progressLines = new List<string>();
+        var project = CreateManagedProject(tempDirectory.Path);
+
+        var result = await workflowService.CompileAsync(project, new Progress<string>(progressLines.Add));
+
+        Assert.True(result.Success);
+        Assert.Contains(progressLines, line => line.StartsWith("CLI CMD | ", StringComparison.Ordinal));
+        Assert.Contains("CLI OUT | Detecting libraries", progressLines);
+        Assert.Contains("CLI ERR | warning: deprecated", progressLines);
+        Assert.Contains("CLI EXIT | code 0", progressLines);
+    }
+
+    [Fact]
     public async Task UploadAsync_WithMultiplePortsAndAutoSelection_FailsWithoutRunningCli()
     {
         using var tempDirectory = new TestDirectory();
@@ -151,10 +180,12 @@ public sealed class ArduinoCliWorkflowServiceTests
     private sealed class CapturingProcessRunner : IProcessRunner
     {
         private readonly ProcessExecutionResult _result;
+        private readonly Action<ProcessExecutionRequest>? _onRun;
 
-        public CapturingProcessRunner(ProcessExecutionResult result)
+        public CapturingProcessRunner(ProcessExecutionResult result, Action<ProcessExecutionRequest>? onRun = null)
         {
             _result = result;
+            _onRun = onRun;
         }
 
         public ProcessExecutionRequest? LastRequest { get; private set; }
@@ -162,6 +193,7 @@ public sealed class ArduinoCliWorkflowServiceTests
         public Task<ProcessExecutionResult> RunAsync(ProcessExecutionRequest request, CancellationToken cancellationToken = default)
         {
             LastRequest = request;
+            _onRun?.Invoke(request);
             return Task.FromResult(_result);
         }
     }

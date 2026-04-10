@@ -45,6 +45,7 @@ public sealed class ProcessRunner : IProcessRunner
             }
 
             stdout.AppendLine(eventArgs.Data);
+            request.OutputProgress?.Report(new ProcessOutputLine(ProcessOutputKind.StandardOutput, eventArgs.Data));
         };
 
         process.ErrorDataReceived += (_, eventArgs) =>
@@ -56,6 +57,7 @@ public sealed class ProcessRunner : IProcessRunner
             }
 
             stderr.AppendLine(eventArgs.Data);
+            request.OutputProgress?.Report(new ProcessOutputLine(ProcessOutputKind.StandardError, eventArgs.Data));
         };
 
         if (!process.Start())
