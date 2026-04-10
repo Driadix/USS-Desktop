@@ -75,7 +75,13 @@ public sealed class ThemeService
     {
         if (WpfApplication.Current.Resources[key] is SolidColorBrush brush)
         {
-            brush.Color = color;
+            if (!brush.IsFrozen)
+            {
+                brush.Color = color;
+                return;
+            }
+
+            WpfApplication.Current.Resources[key] = new SolidColorBrush(color);
             return;
         }
 
