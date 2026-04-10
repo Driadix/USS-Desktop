@@ -26,29 +26,34 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
     public Task<WorkflowResult> CompileAsync(
         ProjectContext project,
         IProgress<string>? outputProgress = null,
+        bool clean = false,
+        bool verbose = false,
         CancellationToken cancellationToken = default) =>
-        ExecuteAsync("compile", project, null, outputProgress, cancellationToken);
+        ExecuteAsync("compile", project, null, outputProgress, clean, verbose, cancellationToken);
 
     public Task<WorkflowResult> UploadAsync(
         ProjectContext project,
         string? portOverride,
         IProgress<string>? outputProgress = null,
+        bool verbose = false,
         CancellationToken cancellationToken = default) =>
-        ExecuteAsync("upload", project, portOverride, outputProgress, cancellationToken);
+        ExecuteAsync("upload", project, portOverride, outputProgress, clean: false, verbose, cancellationToken);
 
     public async Task<WorkflowResult> CompileAndUploadAsync(
         ProjectContext project,
         string? portOverride,
         IProgress<string>? outputProgress = null,
+        bool clean = false,
+        bool verbose = false,
         CancellationToken cancellationToken = default)
     {
-        var compileResult = await CompileAsync(project, outputProgress, cancellationToken);
+        var compileResult = await CompileAsync(project, outputProgress, clean, verbose, cancellationToken);
         if (!compileResult.Success)
         {
             return compileResult with { OperationName = "compile + upload" };
         }
 
-        var uploadResult = await UploadAsync(project, portOverride, outputProgress, cancellationToken);
+        var uploadResult = await UploadAsync(project, portOverride, outputProgress, verbose, cancellationToken);
         return uploadResult with
         {
             OperationName = "compile + upload",
@@ -63,6 +68,8 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         ProjectContext project,
         string? portOverride,
         IProgress<string>? outputProgress,
+        bool clean,
+        bool verbose,
         CancellationToken cancellationToken)
     {
         var readinessFailure = Validate(project, operationName);
@@ -100,7 +107,7 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
 
         var timestamp = DateTimeOffset.Now;
         var logFilePath = Path.Combine(logDirectory, $"{timestamp:yyyyMMdd-HHmmss}-{operationName.Replace(' ', '-')}.log");
-        var arguments = BuildArguments(operationName, project, buildPath, outputDirectory, portOverride);
+        var arguments = BuildArguments(operationName, project, buildPath, outputDirectory, portOverride, clean, verbose);
         if (arguments is null)
         {
             var failure = WorkflowResult.Failure(
@@ -185,7 +192,9 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         ProjectContext project,
         string buildPath,
         string outputDirectory,
-        string? portOverride)
+        string? portOverride,
+        bool clean,
+        bool verbose)
     {
         var arguments = new List<string>
         {
@@ -196,8 +205,18 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
             "--no-color"
         };
 
+        if (verbose)
+        {
+            arguments.Add("--verbose");
+        }
+
         if (string.Equals(operationName, "compile", StringComparison.OrdinalIgnoreCase))
         {
+            if (clean)
+            {
+                arguments.Add("--clean");
+            }
+
             arguments.AddRange(new[] { "--build-path", buildPath, "--output-dir", outputDirectory });
             return arguments;
         }

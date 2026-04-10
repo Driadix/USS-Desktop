@@ -153,6 +153,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _selectedPort = AutoPortSelection;
 
     [ObservableProperty]
+    private bool _useCleanBuild;
+
+    [ObservableProperty]
+    private bool _useVerboseOutput;
+
+    [ObservableProperty]
     private string _importProjectName = string.Empty;
 
     [ObservableProperty]
@@ -390,13 +396,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     private Task CompileAsync() =>
-        RunWorkflowAsync(CompileOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAsync(project, progress, cancellationToken));
+        RunWorkflowAsync(CompileOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAsync(project, progress, clean: UseCleanBuild, verbose: UseVerboseOutput, cancellationToken: cancellationToken));
 
     private Task UploadAsync() =>
-        RunWorkflowAsync(UploadOperationKey, (project, progress, cancellationToken) => _workflowService.UploadAsync(project, GetPortOverrideForWorkflow(), progress, cancellationToken));
+        RunWorkflowAsync(UploadOperationKey, (project, progress, cancellationToken) => _workflowService.UploadAsync(project, GetPortOverrideForWorkflow(), progress, verbose: UseVerboseOutput, cancellationToken: cancellationToken));
 
     private Task CompileAndUploadAsync() =>
-        RunWorkflowAsync(CompileAndUploadOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, GetPortOverrideForWorkflow(), progress, cancellationToken));
+        RunWorkflowAsync(CompileAndUploadOperationKey, (project, progress, cancellationToken) => _workflowService.CompileAndUploadAsync(project, GetPortOverrideForWorkflow(), progress, clean: UseCleanBuild, verbose: UseVerboseOutput, cancellationToken: cancellationToken));
 
     private async Task DeleteLockAsync()
     {
@@ -469,6 +475,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         var actionLabel = LocalizeWorkflowAction(operationKey);
+        var cleanEnabled = UseCleanBuild && !string.Equals(operationKey, UploadOperationKey, StringComparison.Ordinal);
+        var verboseEnabled = UseVerboseOutput;
         _activeWorkflowCancellation = new CancellationTokenSource();
         try
         {
@@ -476,6 +484,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             ActiveOperationLabel = actionLabel;
             SessionLog = string.Empty;
             ProjectStatus = _localization.Format("Workflow.Status.Running", actionLabel);
+            Log.Information(
+                "Workflow starting. Operation={Operation} Clean={Clean} Verbose={Verbose} SelectedPort={SelectedPort}",
+                operationKey,
+                cleanEnabled,
+                verboseEnabled,
+                SelectedPort);
             AppendLog(_localization.Format("Log.WorkflowStarted", actionLabel));
             var progress = new Progress<string>(AppendLog);
             _activeWorkflowTask = workflow(_currentProject, progress, _activeWorkflowCancellation.Token);
@@ -1206,6 +1220,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             ShowBootstrapFields,
             IsBusy,
             IsStoppingOperation,
+            UseCleanBuild,
+            UseVerboseOutput,
             SelectedPort,
             UploadPortAvailable = IsUploadPortAvailable(),
             AvailablePorts = AvailablePorts.ToArray(),

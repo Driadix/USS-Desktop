@@ -478,6 +478,19 @@
                                 </Button>
                             </Grid>
 
+                            <WrapPanel Margin="0,0,0,14" Orientation="Horizontal">
+                                <CheckBox Margin="0,0,10,8"
+                                          Style="{StaticResource AppCheckBoxStyle}"
+                                          Content="{Binding Localization[Actions.OptionClean]}"
+                                          IsChecked="{Binding UseCleanBuild}"
+                                          ToolTip="{Binding Localization[Actions.OptionCleanHint]}" />
+                                <CheckBox Margin="0,0,0,8"
+                                          Style="{StaticResource AppCheckBoxStyle}"
+                                          Content="{Binding Localization[Actions.OptionVerbose]}"
+                                          IsChecked="{Binding UseVerboseOutput}"
+                                          ToolTip="{Binding Localization[Actions.OptionVerboseHint]}" />
+                            </WrapPanel>
+
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />

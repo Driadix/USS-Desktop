@@ -63,6 +63,24 @@ public sealed class ArduinoCliWorkflowServiceTests
     }
 
     [Fact]
+    public async Task CompileAsync_WithCleanAndVerbose_AddsRequestedFlags()
+    {
+        using var tempDirectory = new TestDirectory();
+        var processRunner = new CapturingProcessRunner(new ProcessExecutionResult(0, "compile ok", string.Empty, TimeSpan.FromSeconds(1)));
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
+
+        var project = CreateManagedProject(tempDirectory.Path);
+        var result = await workflowService.CompileAsync(project, clean: true, verbose: true);
+
+        Assert.True(result.Success);
+        Assert.Contains("--clean", processRunner.LastRequest!.Arguments);
+        Assert.Contains("--verbose", processRunner.LastRequest.Arguments);
+    }
+
+    [Fact]
     public async Task UploadAsync_WithAutoSelection_UsesFirstDetectedPort()
     {
         using var tempDirectory = new TestDirectory();
@@ -128,6 +146,45 @@ public sealed class ArduinoCliWorkflowServiceTests
         Assert.Contains("--port", processRunner.LastRequest.Arguments);
         Assert.Contains("COM7", processRunner.LastRequest.Arguments);
         Assert.Contains("--verify", processRunner.LastRequest.Arguments);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithVerbose_AddsVerboseFlag()
+    {
+        using var tempDirectory = new TestDirectory();
+        var processRunner = new CapturingProcessRunner(new ProcessExecutionResult(0, "upload ok", string.Empty, TimeSpan.FromSeconds(1)));
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
+
+        var project = CreateManagedProject(tempDirectory.Path);
+        var result = await workflowService.UploadAsync(project, "COM7", verbose: true);
+
+        Assert.True(result.Success);
+        Assert.Contains("--verbose", processRunner.LastRequest!.Arguments);
+        Assert.DoesNotContain("--clean", processRunner.LastRequest.Arguments);
+    }
+
+    [Fact]
+    public async Task CompileAndUploadAsync_WithCleanAndVerbose_UsesCleanOnlyForCompileStep()
+    {
+        using var tempDirectory = new TestDirectory();
+        var processRunner = new CapturingProcessRunner(new ProcessExecutionResult(0, "ok", string.Empty, TimeSpan.FromSeconds(1)));
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
+
+        var project = CreateManagedProject(tempDirectory.Path);
+        var result = await workflowService.CompileAndUploadAsync(project, "COM7", clean: true, verbose: true);
+
+        Assert.True(result.Success);
+        Assert.Equal(2, processRunner.Requests.Count);
+        Assert.Contains("--clean", processRunner.Requests[0].Arguments);
+        Assert.Contains("--verbose", processRunner.Requests[0].Arguments);
+        Assert.DoesNotContain("--clean", processRunner.Requests[1].Arguments);
+        Assert.Contains("--verbose", processRunner.Requests[1].Arguments);
     }
 
     [Fact]
@@ -235,9 +292,12 @@ public sealed class ArduinoCliWorkflowServiceTests
 
         public ProcessExecutionRequest? LastRequest { get; private set; }
 
+        public List<ProcessExecutionRequest> Requests { get; } = new();
+
         public Task<ProcessExecutionResult> RunAsync(ProcessExecutionRequest request, CancellationToken cancellationToken = default)
         {
             LastRequest = request;
+            Requests.Add(request);
             _onRun?.Invoke(request);
             return Task.FromResult(_result);
         }
