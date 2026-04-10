@@ -21,6 +21,7 @@
             <Setter Property="CornerRadius" Value="18" />
             <Setter Property="Padding" Value="18" />
             <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource InkBrush}" />
         </Style>
 
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
@@ -62,6 +63,7 @@
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Padding" Value="12,10" />
             <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource InkBrush}" />
         </Style>
 
         <Style x:Key="OverlayIconButtonStyle" TargetType="Button">

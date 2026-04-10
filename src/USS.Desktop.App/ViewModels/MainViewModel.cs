@@ -495,8 +495,8 @@ public partial class MainViewModel : ObservableObject
             _activeWorkflowTask = null;
             _activeWorkflowCancellation?.Dispose();
             _activeWorkflowCancellation = null;
-            ActiveOperationLabel = _localization["Actions.ActivityIdle"];
             IsBusy = false;
+            ActiveOperationLabel = ResolveInactiveOperationLabel();
             await RefreshDiagnosticsAsync();
         }
     }
@@ -594,6 +594,10 @@ public partial class MainViewModel : ObservableObject
         HasLockFile = File.Exists(LockFilePath);
         DeleteLockCommand.NotifyCanExecuteChanged();
         OpenProjectLocationCommand.NotifyCanExecuteChanged();
+        if (!IsBusy)
+        {
+            ActiveOperationLabel = ResolveInactiveOperationLabel();
+        }
 
         if (!preserveLog)
         {
@@ -861,7 +865,6 @@ public partial class MainViewModel : ObservableObject
             ImportActionLabel = _localization["Import.Action.CreateUss"];
             ImportHint = _localization["Import.Hint.Pending"];
             BootstrapFamily = _localization["Common.Unknown"];
-            ActiveOperationLabel = _localization["Actions.ActivityIdle"];
             OpenProjectLocationCommand.NotifyCanExecuteChanged();
 
             if (string.IsNullOrWhiteSpace(SessionLog))
@@ -876,7 +879,7 @@ public partial class MainViewModel : ObservableObject
 
         if (!IsBusy || string.IsNullOrWhiteSpace(ActiveOperationLabel))
         {
-            ActiveOperationLabel = _localization["Actions.ActivityIdle"];
+            ActiveOperationLabel = ResolveInactiveOperationLabel();
         }
 
         DiagnosticsSummary = BuildDiagnosticsSummary();
@@ -1055,5 +1058,17 @@ public partial class MainViewModel : ObservableObject
             Issues = Issues.ToArray(),
             DiagnosticsSummary
         };
+    }
+
+    private string ResolveInactiveOperationLabel()
+    {
+        if (_currentProject is null)
+        {
+            return _localization["Actions.ActivityNone"];
+        }
+
+        return _currentProject.CanCompile
+            ? _localization["Actions.ActivityReady"]
+            : _localization["Actions.ActivityUnavailable"];
     }
 }
