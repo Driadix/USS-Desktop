@@ -741,9 +741,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void SyncAvailablePorts()
     {
-        var desiredPorts = new[] { AutoPortSelection }
-            .Concat(_lastPorts.Select(port => port.Address))
-            .ToArray();
+        var desiredPorts = new List<string> { AutoPortSelection };
+        desiredPorts.AddRange(_lastPorts.Select(port => port.Address));
+
+        var normalizedSelectedPort = NormalizeSelectedPort(SelectedPort);
+        if (!string.IsNullOrWhiteSpace(normalizedSelectedPort)
+            && !desiredPorts.Contains(normalizedSelectedPort, StringComparer.OrdinalIgnoreCase))
+        {
+            desiredPorts.Add(normalizedSelectedPort);
+        }
 
         if (AvailablePorts.SequenceEqual(desiredPorts, StringComparer.OrdinalIgnoreCase))
         {

@@ -180,12 +180,11 @@
                     <ControlTemplate TargetType="ToggleButton">
                         <Grid Background="Transparent">
                             <Border x:Name="ToggleBorder"
-                                    Width="40"
-                                    HorizontalAlignment="Right"
+                                    Margin="0,1,1,1"
                                     Background="{DynamicResource SecondaryBrush}"
                                     BorderBrush="{DynamicResource CardStrokeBrush}"
                                     BorderThickness="1,0,0,0"
-                                    CornerRadius="0,12,12,0">
+                                    CornerRadius="0,11,11,0">
                                 <Path Width="12"
                                       Height="7"
                                       HorizontalAlignment="Center"
@@ -240,9 +239,16 @@
 
                 <TextBox x:Name="PART_EditableTextBox"
                          Margin="{TemplateBinding Padding}"
+                         Padding="0"
                          Background="Transparent"
                          BorderThickness="0"
+                         CaretBrush="Transparent"
+                         FocusVisualStyle="{x:Null}"
                          Foreground="{TemplateBinding Foreground}"
+                         SelectionBrush="Transparent"
+                         SelectionOpacity="0"
+                         VerticalAlignment="Center"
+                         VerticalContentAlignment="Center"
                          Visibility="Hidden"
                          IsReadOnly="{TemplateBinding IsReadOnly}" />
 
@@ -258,7 +264,7 @@
                        AllowsTransparency="True"
                        Focusable="False"
                        IsOpen="{TemplateBinding IsDropDownOpen}"
-                       PopupAnimation="Slide">
+                       PopupAnimation="Fade">
                     <Border x:Name="PopupBorder"
                             MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                             MaxHeight="320"

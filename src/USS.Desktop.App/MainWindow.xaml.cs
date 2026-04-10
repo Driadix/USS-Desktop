@@ -7,6 +7,7 @@ using Serilog;
 using USS.Desktop.App.ViewModels;
 using CancelEventArgs = System.ComponentModel.CancelEventArgs;
 using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfScrollBar = System.Windows.Controls.Primitives.ScrollBar;
 using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace USS.Desktop.App;
@@ -97,21 +98,82 @@ public partial class MainWindow : Window
 
     private void OnSelectorComboPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not WpfComboBox comboBox || comboBox.IsDropDownOpen || !comboBox.IsEnabled)
+        if (sender is not WpfComboBox comboBox || !comboBox.IsEnabled)
         {
             return;
         }
 
+        var originalSource = e.OriginalSource as DependencyObject;
+        if (IsPopupInteraction(originalSource))
+        {
+            return;
+        }
+
+        if (comboBox.IsEditable && IsEditableTextInteraction(originalSource))
+        {
+            if (!comboBox.IsDropDownOpen)
+            {
+                OpenSelector(comboBox);
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (comboBox.IsDropDownOpen)
+        {
+            comboBox.IsDropDownOpen = false;
+            e.Handled = true;
+            return;
+        }
+
+        OpenSelector(comboBox);
+        e.Handled = true;
+    }
+
+    private static bool IsPopupInteraction(DependencyObject? source) =>
+        FindAncestor<ComboBoxItem>(source) is not null || FindAncestor<WpfScrollBar>(source) is not null;
+
+    private static bool IsEditableTextInteraction(DependencyObject? source) =>
+        FindAncestor<WpfTextBox>(source) is not null;
+
+    private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
+    {
+        while (source is not null)
+        {
+            if (source is T typedSource)
+            {
+                return typedSource;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return null;
+    }
+
+    private void OpenSelector(WpfComboBox comboBox)
+    {
         comboBox.Focus();
         comboBox.IsDropDownOpen = true;
 
-        if (comboBox.IsEditable && FindDescendant<WpfTextBox>(comboBox) is { } editableTextBox)
+        if (!comboBox.IsEditable)
         {
-            editableTextBox.Focus();
-            editableTextBox.SelectAll();
+            return;
         }
 
-        e.Handled = true;
+        _ = Dispatcher.BeginInvoke(
+            () =>
+            {
+                if (!comboBox.IsDropDownOpen || FindDescendant<WpfTextBox>(comboBox) is not { } editableTextBox)
+                {
+                    return;
+                }
+
+                editableTextBox.Focus();
+                editableTextBox.Select(editableTextBox.Text.Length, 0);
+            },
+            DispatcherPriority.Input);
     }
 
     private void AttachLogScrollViewer()

@@ -502,6 +502,7 @@
                                           StaysOpenOnEdit="True"
                                           PreviewMouseLeftButtonDown="OnSelectorComboPreviewMouseLeftButtonDown"
                                           ItemsSource="{Binding AvailablePorts}"
+                                          SelectedItem="{Binding SelectedPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           Text="{Binding SelectedPort, UpdateSourceTrigger=PropertyChanged}" />
 
                                 <Button Grid.Row="1"
