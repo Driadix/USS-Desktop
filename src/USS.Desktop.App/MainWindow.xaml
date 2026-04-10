@@ -64,6 +64,11 @@
             <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
         </Style>
 
+        <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+            <Setter Property="Background" Value="#BE3D2F" />
+            <Setter Property="BorderBrush" Value="#8F2B20" />
+        </Style>
+
         <Style x:Key="InputStyle" TargetType="TextBox">
             <Setter Property="Margin" Value="0,0,0,12" />
             <Setter Property="Padding" Value="10,8" />
@@ -300,6 +305,10 @@
                                             Width="170"
                                             Content="Compile + Flash"
                                             Command="{Binding CompileAndUploadCommand}" />
+                                    <Button Style="{StaticResource DangerButtonStyle}"
+                                            Width="120"
+                                            Content="Stop"
+                                            Command="{Binding StopCommand}" />
                                 </WrapPanel>
 
                                 <TextBlock Style="{StaticResource CaptionStyle}" Text="Upload Port Override" />
@@ -395,16 +404,49 @@
                     </Border>
 
                     <Border Style="{StaticResource CardStyle}" Margin="0,0,0,0">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Run Log" />
-                            <TextBox Height="300"
-                                     AcceptsReturn="True"
-                                     IsReadOnly="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     TextWrapping="Wrap"
-                                     Text="{Binding SessionLog}" />
-                        </StackPanel>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Run Log" />
+
+                                <WrapPanel Grid.Column="1" Margin="0,0,0,8">
+                                    <Button Style="{StaticResource SecondaryButtonStyle}"
+                                            Width="110"
+                                            Content="Clear"
+                                            Command="{Binding ClearLogCommand}" />
+                                </WrapPanel>
+                            </Grid>
+
+                            <Grid Grid.Row="1">
+                                <TextBox x:Name="SessionLogTextBox"
+                                         Height="300"
+                                         AcceptsReturn="True"
+                                         IsReadOnly="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         TextWrapping="Wrap"
+                                         Text="{Binding SessionLog}" />
+                                <Button x:Name="FollowLogButton"
+                                        Width="92"
+                                        Height="34"
+                                        Margin="0,0,12,12"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Bottom"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Visibility="Collapsed"
+                                        Content="↓ Live"
+                                        Click="OnFollowLogButtonClick" />
+                            </Grid>
+                        </Grid>
                     </Border>
                 </StackPanel>
             </Grid>

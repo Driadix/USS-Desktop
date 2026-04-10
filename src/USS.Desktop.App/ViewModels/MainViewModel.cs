@@ -45,6 +45,8 @@ public partial class MainViewModel : ObservableObject
         CompileCommand = new AsyncRelayCommand(CompileAsync, CanRunWorkflow);
         UploadCommand = new AsyncRelayCommand(UploadAsync, CanRunWorkflow);
         CompileAndUploadCommand = new AsyncRelayCommand(CompileAndUploadAsync, CanRunWorkflow);
+        StopCommand = new AsyncRelayCommand(StopAsync, CanStopWorkflow);
+        ClearLogCommand = new RelayCommand(ClearLog);
         OpenRecentProjectCommand = new AsyncRelayCommand<string?>(OpenRecentProjectAsync, path => CanEditWorkspace() && !string.IsNullOrWhiteSpace(path));
     }
 
@@ -67,6 +69,10 @@ public partial class MainViewModel : ObservableObject
     public IAsyncRelayCommand UploadCommand { get; }
 
     public IAsyncRelayCommand CompileAndUploadCommand { get; }
+
+    public IAsyncRelayCommand StopCommand { get; }
+
+    public IRelayCommand ClearLogCommand { get; }
 
     public IAsyncRelayCommand<string?> OpenRecentProjectCommand { get; }
 
@@ -151,6 +157,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _lockFilePath = string.Empty;
 
+    [ObservableProperty]
+    private bool _isStoppingOperation;
+
     public async Task InitializeAsync()
     {
         await RefreshDiagnosticsAsync();
@@ -167,7 +176,13 @@ public partial class MainViewModel : ObservableObject
         CompileCommand.NotifyCanExecuteChanged();
         UploadCommand.NotifyCanExecuteChanged();
         CompileAndUploadCommand.NotifyCanExecuteChanged();
+        StopCommand.NotifyCanExecuteChanged();
         OpenRecentProjectCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsStoppingOperationChanged(bool value)
+    {
+        StopCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnBootstrapFqbnChanged(string value)
@@ -193,6 +208,8 @@ public partial class MainViewModel : ObservableObject
     private bool CanDeleteLock() => !IsBusy && _currentProject is not null && HasLockFile;
 
     private bool CanRunWorkflow() => !IsBusy && _currentProject?.CanCompile == true;
+
+    private bool CanStopWorkflow() => IsBusy && _activeWorkflowCancellation is not null && !IsStoppingOperation;
 
     private async Task OpenFolderAsync()
     {
@@ -324,6 +341,24 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task StopAsync()
+    {
+        if (_activeWorkflowCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            IsStoppingOperation = true;
+            await CancelActiveOperationAsync("Stop requested. Cancelling active operation.");
+        }
+        finally
+        {
+            IsStoppingOperation = false;
+        }
+    }
+
     private async Task RunWorkflowAsync(
         string actionLabel,
         Func<ProjectContext, IProgress<string>, CancellationToken, Task<WorkflowResult>> workflow)
@@ -357,6 +392,7 @@ public partial class MainViewModel : ObservableObject
         {
             ProjectStatus = $"{actionLabel} cancelled.";
             AppendLog($"{actionLabel} cancelled. Active CLI processes were stopped.");
+            await RefreshCurrentProjectStateAsync(autoDeleteLockIfPresent: true);
         }
         catch (Exception exception)
         {
@@ -519,9 +555,14 @@ public partial class MainViewModel : ObservableObject
     private void AppendLog(string message)
     {
         var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-        SessionLog = SessionLog == "Session log will appear here."
+        SessionLog = string.IsNullOrWhiteSpace(SessionLog) || SessionLog == "Session log will appear here."
             ? line
             : $"{SessionLog}{Environment.NewLine}{line}";
+    }
+
+    private void ClearLog()
+    {
+        SessionLog = string.Empty;
     }
 
     private static IReadOnlyList<SketchLibraryReference> ParseLibraries(string rawValue)
@@ -562,17 +603,61 @@ public partial class MainViewModel : ObservableObject
             return false;
         }
 
-        if (_activeWorkflowCancellation is not null)
-        {
-            AppendLog("Shutdown requested. Cancelling active operation.");
-            _activeWorkflowCancellation.Cancel();
+        await CancelActiveOperationAsync("Shutdown requested. Cancelling active operation.");
 
-            if (_activeWorkflowTask is not null)
+        return true;
+    }
+
+    private async Task CancelActiveOperationAsync(string reason)
+    {
+        if (_activeWorkflowCancellation is null)
+        {
+            return;
+        }
+
+        AppendLog(reason);
+        _activeWorkflowCancellation.Cancel();
+
+        if (_activeWorkflowTask is not null)
+        {
+            try
             {
-                await Task.WhenAny(_activeWorkflowTask, Task.Delay(TimeSpan.FromSeconds(5)));
+                await _activeWorkflowTask;
+            }
+            catch (OperationCanceledException)
+            {
             }
         }
 
-        return true;
+        await RefreshCurrentProjectStateAsync(autoDeleteLockIfPresent: true);
+    }
+
+    private async Task RefreshCurrentProjectStateAsync(bool autoDeleteLockIfPresent)
+    {
+        if (_currentProject is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var refreshedProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
+            ApplyProject(refreshedProject, preserveLog: true);
+
+            if (autoDeleteLockIfPresent && HasLockFile)
+            {
+                var deleted = await _workspaceService.DeleteLockFileAsync(_currentProject.Files.ProjectDirectory);
+                if (deleted)
+                {
+                    AppendLog("Deleted build/work/uss.lock after cancellation.");
+                    refreshedProject = await _workspaceService.OpenAsync(_currentProject.Files.ProjectDirectory);
+                    ApplyProject(refreshedProject, preserveLog: true);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"Project refresh failed: {exception.Message}");
+        }
     }
 }
