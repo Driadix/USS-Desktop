@@ -22,6 +22,7 @@ $resolvedOutput =
     else {
         Join-Path $repositoryRoot ("src\USS.Desktop.App\bin\{0}\net10.0-windows\{1}\publish" -f $Configuration, $Runtime)
     }
+$selfContained = $Configuration -eq "Release"
 
 if (Test-Path $resolvedOutput) {
     Remove-Item -LiteralPath $resolvedOutput -Recurse -Force
@@ -37,12 +38,12 @@ $publishArguments = @(
     $projectPath,
     "--configuration", $Configuration,
     "--runtime", $Runtime,
-    "--self-contained", "false",
+    "--self-contained", $selfContained.ToString().ToLowerInvariant(),
     "--no-restore"
 )
 
 if (-not [string]::IsNullOrWhiteSpace($Output)) {
-    $publishArguments += @("--output", $Output)
+    $publishArguments += @("--output", $resolvedOutput)
 }
 
 dotnet @publishArguments

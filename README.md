@@ -75,3 +75,10 @@ Publish the desktop app with the bundled toolset copied next to the app output:
 ```powershell
 .\scripts\Publish-Portable.ps1
 ```
+
+Release publishes are self-contained for `win-x64`. Create a GitHub release by pushing a semantic version tag:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```

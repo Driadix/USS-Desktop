@@ -485,3 +485,5 @@ $RECYCLE.BIN/
 toolsets/*
 !toolsets/README.md
 !toolsets/arduino-cli.manifest.json
+
+**/.codex

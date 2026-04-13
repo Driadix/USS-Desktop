@@ -55,6 +55,59 @@ public sealed class FileProjectWorkspaceServiceTests
     }
 
     [Fact]
+    public async Task OpenAsync_WithStm32ManagedProject_LoadsConfigurationAndProfile()
+    {
+        using var tempDirectory = new TestDirectory();
+        await File.WriteAllTextAsync(
+            Path.Combine(tempDirectory.Path, "sketch.yaml"),
+            """
+            default_profile: main
+            profiles:
+              main:
+                fqbn: STMicroelectronics:stm32:GenF4
+                platforms:
+                  - platform: STMicroelectronics:stm32 (2.7.1)
+                    platform_index_url: https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
+                libraries:
+                  - AS5600 (0.4.1)
+                  - STM32_CAN (1.1.0)
+                  - STM32_TimerInterrupt (1.3.0)
+                  - STM32duino RTC (1.6.0)
+            """);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(tempDirectory.Path, "uss.yaml"),
+            """
+            version: 1
+            project:
+              name: STM32 Test
+              kind: arduino
+              family: stm32
+              profile: main
+            artifacts:
+              output_dir: build/out
+              log_dir: build/logs
+              work_dir: build/work
+            upload:
+              port: auto
+              verify_after_upload: true
+            """);
+
+        var service = new FileProjectWorkspaceService();
+        var project = await service.OpenAsync(tempDirectory.Path);
+
+        Assert.Equal(ProjectDiscoveryKind.ManagedProject, project.DiscoveryKind);
+        Assert.Equal("STM32 Test", project.DisplayName);
+        Assert.Equal(ProjectFamily.Stm32, project.Family);
+        Assert.Equal("main", project.ActiveProfileName);
+        Assert.NotNull(project.ActiveProfile);
+        Assert.Equal("STMicroelectronics:stm32:GenF4", project.ActiveProfile!.Fqbn);
+        Assert.Contains(project.ActiveProfile.Platforms, platform => platform.Platform == "STMicroelectronics:stm32" && platform.Version == "2.7.1");
+        Assert.Contains(project.ActiveProfile.Libraries, library => library.Name == "STM32_CAN" && library.Version == "1.1.0");
+        Assert.Empty(project.Issues);
+    }
+
+    [Fact]
     public async Task CreateUssConfigurationAsync_FromSketchOnlyFolder_CreatesManagedProject()
     {
         using var tempDirectory = new TestDirectory();

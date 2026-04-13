@@ -25,6 +25,7 @@ public static class ProjectFamilyDetector
         return $"{segments[0]}:{segments[1]}".ToLowerInvariant() switch
         {
             "esp32:esp32" => ProjectFamily.Esp32,
+            "stmicroelectronics:stm32" => ProjectFamily.Stm32,
             "stm32:stm32" => ProjectFamily.Stm32,
             _ => ProjectFamily.Unknown
         };
