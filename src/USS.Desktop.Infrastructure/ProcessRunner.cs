@@ -18,6 +18,8 @@ public sealed class ProcessRunner : IProcessRunner, IDisposable
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };

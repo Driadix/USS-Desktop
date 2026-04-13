@@ -94,7 +94,8 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         var outputDirectory = EnsureDirectory(project.Files.ProjectDirectory, artifacts.OutputDirectory);
         var logDirectory = EnsureDirectory(project.Files.ProjectDirectory, artifacts.LogDirectory);
         var workRootDirectory = EnsureDirectory(project.Files.ProjectDirectory, artifacts.WorkDirectory);
-        var buildPath = EnsureDirectory(workRootDirectory, project.ActiveProfileName!);
+        var buildCacheDirectory = EnsureDirectory(toolset.ArduinoDataDirectory, "build-cache");
+        var downloadsDirectory = EnsureDirectory(toolset.ArduinoDataDirectory, "staging");
 
         var lockFilePath = Path.Combine(workRootDirectory, "uss.lock");
         if (File.Exists(lockFilePath))
@@ -107,7 +108,7 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
 
         var timestamp = DateTimeOffset.Now;
         var logFilePath = Path.Combine(logDirectory, $"{timestamp:yyyyMMdd-HHmmss}-{operationName.Replace(' ', '-')}.log");
-        var arguments = BuildArguments(operationName, project, buildPath, outputDirectory, portOverride, clean, verbose);
+        var arguments = BuildArguments(operationName, project, outputDirectory, portOverride, clean, verbose);
         if (arguments is null)
         {
             var failure = WorkflowResult.Failure(
@@ -121,11 +122,13 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         var request = new ProcessExecutionRequest(
             toolset.ArduinoCliPath,
             arguments,
-            project.Files.ProjectDirectory,
+            toolset.ArduinoDataDirectory,
             new Dictionary<string, string?>
             {
                 ["ARDUINO_DIRECTORIES_DATA"] = toolset.ArduinoDataDirectory,
-                ["ARDUINO_DIRECTORIES_USER"] = toolset.ArduinoUserDirectory
+                ["ARDUINO_DIRECTORIES_DOWNLOADS"] = downloadsDirectory,
+                ["ARDUINO_DIRECTORIES_USER"] = toolset.ArduinoUserDirectory,
+                ["ARDUINO_BUILD_CACHE_PATH"] = buildCacheDirectory
             },
             CreateProcessOutputProgress(outputProgress));
 
@@ -190,7 +193,6 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
     private IReadOnlyList<string>? BuildArguments(
         string operationName,
         ProjectContext project,
-        string buildPath,
         string outputDirectory,
         string? portOverride,
         bool clean,
@@ -217,7 +219,7 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
                 arguments.Add("--clean");
             }
 
-            arguments.AddRange(new[] { "--build-path", buildPath, "--output-dir", outputDirectory });
+            arguments.AddRange(new[] { "--output-dir", outputDirectory });
             return arguments;
         }
 

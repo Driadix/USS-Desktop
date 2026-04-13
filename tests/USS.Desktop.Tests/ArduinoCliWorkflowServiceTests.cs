@@ -25,10 +25,16 @@ public sealed class ArduinoCliWorkflowServiceTests
         Assert.Equal("compile", processRunner.LastRequest.Arguments[0]);
         Assert.Equal(project.Files.ProjectDirectory, processRunner.LastRequest.Arguments[1]);
         Assert.Contains("--profile", processRunner.LastRequest.Arguments);
-        Assert.Contains("--build-path", processRunner.LastRequest.Arguments);
+        Assert.DoesNotContain("--build-path", processRunner.LastRequest.Arguments);
         Assert.Contains("--output-dir", processRunner.LastRequest.Arguments);
+        Assert.Equal(Path.Combine(tempDirectory.Path, "build", "out"), GetArgumentValue(processRunner.LastRequest.Arguments, "--output-dir"));
+        Assert.Equal(Path.Combine(tempDirectory.Path, "arduino-data", "data"), processRunner.LastRequest.WorkingDirectory);
         Assert.Equal(Path.Combine(tempDirectory.Path, "arduino-data", "data"), processRunner.LastRequest.EnvironmentVariables["ARDUINO_DIRECTORIES_DATA"]);
+        Assert.Equal(Path.Combine(tempDirectory.Path, "arduino-data", "data", "staging"), processRunner.LastRequest.EnvironmentVariables["ARDUINO_DIRECTORIES_DOWNLOADS"]);
         Assert.Equal(Path.Combine(tempDirectory.Path, "arduino-data", "user"), processRunner.LastRequest.EnvironmentVariables["ARDUINO_DIRECTORIES_USER"]);
+        Assert.Equal(Path.Combine(tempDirectory.Path, "arduino-data", "data", "build-cache"), processRunner.LastRequest.EnvironmentVariables["ARDUINO_BUILD_CACHE_PATH"]);
+        Assert.True(Directory.Exists(Path.Combine(tempDirectory.Path, "arduino-data", "data", "build-cache")));
+        Assert.True(Directory.Exists(Path.Combine(tempDirectory.Path, "arduino-data", "data", "staging")));
         Assert.False(File.Exists(Path.Combine(tempDirectory.Path, "build", "work", "uss.lock")));
         Assert.True(File.Exists(result.LogFilePath));
     }
@@ -244,6 +250,19 @@ public sealed class ArduinoCliWorkflowServiceTests
                 "serial"),
             ProjectFamily.Esp32,
             Array.Empty<ProjectValidationIssue>());
+    }
+
+    private static string? GetArgumentValue(IReadOnlyList<string> arguments, string name)
+    {
+        for (var index = 0; index < arguments.Count - 1; index++)
+        {
+            if (arguments[index] == name)
+            {
+                return arguments[index + 1];
+            }
+        }
+
+        return null;
     }
 
     private sealed class StubToolsetResolver : IToolsetResolver
