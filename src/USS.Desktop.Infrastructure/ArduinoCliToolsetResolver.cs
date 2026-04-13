@@ -36,10 +36,10 @@ public sealed class ArduinoCliToolsetResolver : IToolsetResolver
             return Path.GetFullPath(Environment.ExpandEnvironmentVariables(overrideRoot));
         }
 
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return string.IsNullOrWhiteSpace(localAppData)
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(userProfile)
             ? Path.Combine(applicationRoot, "uss-data")
-            : Path.Combine(localAppData, "USSDesktop");
+            : Path.Combine(userProfile, ".uss");
     }
 
     private static string ResolveApplicationRoot()
