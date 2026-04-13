@@ -5,6 +5,7 @@ public sealed record UpdaterOptions(
     string? AppDirectory,
     string? ExecutableName,
     Uri? DownloadUrl,
+    Uri? ReleasePageUrl,
     string? Sha256Digest)
 {
     public static UpdaterOptions Parse(IReadOnlyList<string> args)
@@ -25,16 +26,19 @@ public sealed record UpdaterOptions(
         values.TryGetValue("app-dir", out var appDirectory);
         values.TryGetValue("exe", out var executableName);
         values.TryGetValue("download-url", out var downloadUrlValue);
+        values.TryGetValue("release-url", out var releaseUrlValue);
         values.TryGetValue("sha256", out var sha256Digest);
 
         _ = int.TryParse(processIdValue, out var processId);
         Uri.TryCreate(downloadUrlValue, UriKind.Absolute, out var downloadUrl);
+        Uri.TryCreate(releaseUrlValue, UriKind.Absolute, out var releasePageUrl);
 
         return new UpdaterOptions(
             processIdValue is null ? null : processId,
             appDirectory,
             executableName,
             downloadUrl,
+            releasePageUrl,
             sha256Digest);
     }
 
@@ -55,6 +59,12 @@ public sealed record UpdaterOptions(
         if (DownloadUrl is null)
         {
             message = "Download URL is missing or invalid.";
+            return false;
+        }
+
+        if (ReleasePageUrl is null)
+        {
+            message = "Release page URL is missing or invalid.";
             return false;
         }
 

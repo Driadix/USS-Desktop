@@ -33,8 +33,7 @@ public sealed class UpdateInstallerLauncher : IUpdateInstallerLauncher
             FileName = updaterExecutablePath,
             WorkingDirectory = launchDirectory,
             UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden
+            CreateNoWindow = false
         };
 
         startInfo.ArgumentList.Add("--pid");
@@ -45,6 +44,8 @@ public sealed class UpdateInstallerLauncher : IUpdateInstallerLauncher
         startInfo.ArgumentList.Add(applicationExecutable);
         startInfo.ArgumentList.Add("--download-url");
         startInfo.ArgumentList.Add(release.DownloadUrl.AbsoluteUri);
+        startInfo.ArgumentList.Add("--release-url");
+        startInfo.ArgumentList.Add(release.ReleasePageUrl.AbsoluteUri);
 
         if (string.IsNullOrWhiteSpace(release.Sha256Digest))
         {

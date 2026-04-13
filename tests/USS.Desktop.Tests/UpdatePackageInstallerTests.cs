@@ -132,10 +132,44 @@ public sealed class UpdatePackageInstallerTests
             AppDirectory: tempDirectory.Path,
             ExecutableName: "USS.Desktop.App.exe",
             DownloadUrl: new Uri("https://example.test/USS.Desktop-win-x64.zip"),
+            ReleasePageUrl: new Uri("https://github.com/Driadix/USS-Desktop/releases/tag/v0.9.7"),
             Sha256Digest: null);
 
         Assert.False(options.IsValid(out var message));
         Assert.Contains("SHA-256", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UpdaterOptions_IsValid_RequiresReleasePageUrl()
+    {
+        using var tempDirectory = new TestDirectory();
+        var options = new UpdaterOptions(
+            ProcessId: 123,
+            AppDirectory: tempDirectory.Path,
+            ExecutableName: "USS.Desktop.App.exe",
+            DownloadUrl: new Uri("https://example.test/USS.Desktop-win-x64.zip"),
+            ReleasePageUrl: null,
+            Sha256Digest: $"sha256:{new string('0', 64)}");
+
+        Assert.False(options.IsValid(out var message));
+        Assert.Contains("Release page URL", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UpdaterOptions_Parse_ReadsReleasePageUrl()
+    {
+        using var tempDirectory = new TestDirectory();
+        var options = UpdaterOptions.Parse([
+            "--pid", "123",
+            "--app-dir", tempDirectory.Path,
+            "--exe", "USS.Desktop.App.exe",
+            "--download-url", "https://example.test/USS.Desktop-win-x64.zip",
+            "--release-url", "https://github.com/Driadix/USS-Desktop/releases/tag/v0.9.7",
+            "--sha256", $"sha256:{new string('0', 64)}"
+        ]);
+
+        Assert.True(options.IsValid(out _));
+        Assert.Equal(new Uri("https://github.com/Driadix/USS-Desktop/releases/tag/v0.9.7"), options.ReleasePageUrl);
     }
 
     private sealed class TestDirectory : IDisposable
