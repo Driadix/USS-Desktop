@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
@@ -34,16 +35,20 @@ public partial class App : WpfApplication
             Log.Information("Starting USS Desktop.");
 
             var services = new ServiceCollection();
+            services.AddSingleton<HttpClient>();
             services.AddSingleton<IProjectWorkspaceService, FileProjectWorkspaceService>();
             services.AddSingleton<IToolsetResolver, ArduinoCliToolsetResolver>();
             services.AddSingleton<IProcessRunner, ProcessRunner>();
             services.AddSingleton<ISerialPortService, SerialPortService>();
             services.AddSingleton<IArduinoCliWorkflowService, ArduinoCliWorkflowService>();
+            services.AddSingleton<IUpdateService, GitHubUpdateService>();
             services.AddSingleton<IAppSettingsStore, JsonAppSettingsStore>();
             services.AddSingleton<IFolderPicker, FolderPicker>();
             services.AddSingleton<IConfirmationService, MessageBoxConfirmationService>();
             services.AddSingleton<IRecentProjectsStore, JsonRecentProjectsStore>();
             services.AddSingleton<IThemeEditorDialogService, ThemeEditorDialogService>();
+            services.AddSingleton<IApplicationVersionProvider, ApplicationVersionProvider>();
+            services.AddSingleton<IUpdateInstallerLauncher, UpdateInstallerLauncher>();
             services.AddSingleton<UserPreferencesService>();
             services.AddSingleton<LocalizationService>();
             services.AddSingleton<ThemeService>();

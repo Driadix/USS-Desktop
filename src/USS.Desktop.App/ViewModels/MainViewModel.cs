@@ -25,12 +25,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IArduinoCliWorkflowService _workflowService;
     private readonly IToolsetResolver _toolsetResolver;
     private readonly ISerialPortService _serialPortService;
+    private readonly IUpdateService _updateService;
     private readonly IFolderPicker _folderPicker;
     private readonly IConfirmationService _confirmationService;
     private readonly IRecentProjectsStore _recentProjectsStore;
     private readonly LocalizationService _localization;
     private readonly UserPreferencesService _userPreferencesService;
     private readonly IThemeEditorDialogService _themeEditorDialogService;
+    private readonly IApplicationVersionProvider _versionProvider;
+    private readonly IUpdateInstallerLauncher _updateInstallerLauncher;
     private CancellationTokenSource? _activeWorkflowCancellation;
     private Task<WorkflowResult>? _activeWorkflowTask;
     private ProjectContext? _currentProject;
@@ -47,25 +50,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IArduinoCliWorkflowService workflowService,
         IToolsetResolver toolsetResolver,
         ISerialPortService serialPortService,
+        IUpdateService updateService,
         IFolderPicker folderPicker,
         IConfirmationService confirmationService,
         IRecentProjectsStore recentProjectsStore,
         LocalizationService localization,
         UserPreferencesService userPreferencesService,
-        IThemeEditorDialogService themeEditorDialogService)
+        IThemeEditorDialogService themeEditorDialogService,
+        IApplicationVersionProvider versionProvider,
+        IUpdateInstallerLauncher updateInstallerLauncher)
     {
         _workspaceService = workspaceService;
         _workflowService = workflowService;
         _toolsetResolver = toolsetResolver;
         _serialPortService = serialPortService;
+        _updateService = updateService;
         _folderPicker = folderPicker;
         _confirmationService = confirmationService;
         _recentProjectsStore = recentProjectsStore;
         _localization = localization;
         _userPreferencesService = userPreferencesService;
         _themeEditorDialogService = themeEditorDialogService;
+        _versionProvider = versionProvider;
+        _updateInstallerLauncher = updateInstallerLauncher;
 
         Localization = localization;
+        ApplicationVersionLabel = versionProvider.DisplayVersion;
 
         OpenFolderCommand = new AsyncRelayCommand(OpenFolderAsync, CanEditWorkspace);
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, CanEditWorkspace);
@@ -77,6 +87,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         StopCommand = new AsyncRelayCommand(StopAsync, CanStopWorkflow);
         ClearLogCommand = new RelayCommand(ClearLog);
         OpenThemeEditorCommand = new AsyncRelayCommand(OpenThemeEditorAsync);
+        CheckForUpdatesCommand = new AsyncRelayCommand(CheckForUpdatesManuallyAsync, CanCheckForUpdates);
         OpenProjectLocationCommand = new RelayCommand(OpenProjectLocation, CanOpenProjectLocation);
         OpenRecentProjectCommand = new AsyncRelayCommand<string?>(OpenRecentProjectAsync, path => CanEditWorkspace() && !string.IsNullOrWhiteSpace(path));
 
@@ -117,6 +128,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public IRelayCommand ClearLogCommand { get; }
 
     public IAsyncRelayCommand OpenThemeEditorCommand { get; }
+
+    public IAsyncRelayCommand CheckForUpdatesCommand { get; }
 
     public IRelayCommand OpenProjectLocationCommand { get; }
 
@@ -221,6 +234,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _activeOperationLabel = string.Empty;
 
+    [ObservableProperty]
+    private string _applicationVersionLabel = string.Empty;
+
+    [ObservableProperty]
+    private string _updateStatus = string.Empty;
+
+    [ObservableProperty]
+    private bool _isCheckingForUpdates;
+
     public async Task InitializeAsync()
     {
         ApplyLocalizedShellState();
@@ -229,6 +251,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         EnsurePortPollingStarted();
         AppendLog(_localization["Log.AppReady"]);
         LogStateSnapshot("Initial UI state loaded.");
+        _ = CheckForUpdatesOnStartupAsync();
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -247,6 +270,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     partial void OnIsStoppingOperationChanged(bool value)
     {
         StopCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsCheckingForUpdatesChanged(bool value)
+    {
+        CheckForUpdatesCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnBootstrapFqbnChanged(string value)
@@ -309,6 +337,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool CanStopWorkflow() => IsBusy && _activeWorkflowCancellation is not null && !IsStoppingOperation;
 
     private bool CanOpenProjectLocation() => Directory.Exists(SelectedProjectPath);
+
+    private bool CanCheckForUpdates() => !IsCheckingForUpdates;
 
     private async Task OpenFolderAsync()
     {
@@ -466,6 +496,116 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task OpenThemeEditorAsync()
     {
         await _themeEditorDialogService.OpenAsync();
+    }
+
+    private Task CheckForUpdatesOnStartupAsync() => CheckForUpdatesAsync(showUpToDateResult: false);
+
+    private Task CheckForUpdatesManuallyAsync() => CheckForUpdatesAsync(showUpToDateResult: true);
+
+    private async Task CheckForUpdatesAsync(bool showUpToDateResult)
+    {
+        if (IsCheckingForUpdates)
+        {
+            return;
+        }
+
+        try
+        {
+            IsCheckingForUpdates = true;
+            UpdateStatus = _localization["Updates.Checking"];
+            AppendLog(_localization["Log.UpdateCheckStarted"]);
+
+            var result = await _updateService.CheckForUpdateAsync(_versionProvider.CurrentVersion);
+            UpdateStatus = result.Message;
+
+            switch (result.Status)
+            {
+                case UpdateCheckStatus.UpToDate:
+                    AppendLog(_localization.Format("Log.UpdateCheckUpToDate", ApplicationVersionLabel));
+                    if (showUpToDateResult)
+                    {
+                        _confirmationService.ShowInformation(
+                            _localization["Updates.UpToDate.Title"],
+                            _localization.Format("Updates.UpToDate.Message", ApplicationVersionLabel));
+                    }
+                    break;
+
+                case UpdateCheckStatus.UpdateAvailable:
+                    if (result.Release is not null)
+                    {
+                        AppendLog(_localization.Format("Log.UpdateAvailable", ApplicationVersion.FormatForDisplay(result.Release.Version)));
+                        await PromptForUpdateAsync(result.Release);
+                    }
+                    break;
+
+                case UpdateCheckStatus.Failed:
+                    AppendLog(_localization.Format("Log.UpdateCheckFailed", result.Message));
+                    if (showUpToDateResult)
+                    {
+                        _confirmationService.ShowInformation(
+                            _localization["Updates.CheckFailed.Title"],
+                            _localization.Format("Updates.CheckFailed.Message", result.Message));
+                    }
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatus = _localization["Updates.CheckCancelled"];
+        }
+        catch (Exception exception)
+        {
+            UpdateStatus = exception.Message;
+            AppendLog(_localization.Format("Log.UpdateCheckFailed", exception.Message));
+            Log.Error(exception, "Update check failed.");
+
+            if (showUpToDateResult)
+            {
+                _confirmationService.ShowInformation(
+                    _localization["Updates.CheckFailed.Title"],
+                    _localization.Format("Updates.CheckFailed.Message", exception.Message));
+            }
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    private async Task PromptForUpdateAsync(ApplicationRelease release)
+    {
+        var releaseVersionLabel = ApplicationVersion.FormatForDisplay(release.Version);
+        var confirmed = _confirmationService.Confirm(
+            _localization["Updates.Available.Title"],
+            _localization.Format("Updates.Available.Message", releaseVersionLabel, ApplicationVersionLabel));
+
+        if (!confirmed)
+        {
+            AppendLog(_localization["Log.UpdateDeclined"]);
+            return;
+        }
+
+        if (!await RequestCloseAsync())
+        {
+            AppendLog(_localization["Log.UpdateCancelledByClose"]);
+            return;
+        }
+
+        try
+        {
+            _updateInstallerLauncher.Launch(release);
+            AppendLog(_localization.Format("Log.UpdateStarted", releaseVersionLabel));
+            System.Windows.Application.Current.Shutdown();
+        }
+        catch (Exception exception)
+        {
+            ProjectStatus = exception.Message;
+            AppendLog(_localization.Format("Log.UpdateStartFailed", exception.Message));
+            Log.Error(exception, "Failed to start updater.");
+            _confirmationService.ShowInformation(
+                _localization["Updates.StartFailed.Title"],
+                _localization.Format("Updates.StartFailed.Message", exception.Message));
+        }
     }
 
     private async Task RunWorkflowAsync(
@@ -1261,6 +1401,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             DiscoveryLabel,
             ProjectStatus,
             ActiveOperationLabel,
+            ApplicationVersionLabel,
+            UpdateStatus,
+            IsCheckingForUpdates,
             HasLockFile,
             LockFilePath,
             ShowImportPanel,

@@ -605,5 +605,31 @@
                 </Border>
             </Grid>
         </Grid>
+
+        <Border Grid.RowSpan="2"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Panel.ZIndex="2"
+                Padding="10,7"
+                CornerRadius="10"
+                Background="{DynamicResource ChromeSurfaceBrush}"
+                BorderBrush="{DynamicResource ChromeStrokeBrush}"
+                BorderThickness="1"
+                ToolTip="{Binding UpdateStatus}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock VerticalAlignment="Center"
+                           Margin="0,0,10,0"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource MutedInkBrush}"
+                           Text="{Binding ApplicationVersionLabel}" />
+                <Button Width="126"
+                        Height="30"
+                        Margin="0"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Content="{Binding Localization[Updates.Check]}"
+                        Command="{Binding CheckForUpdatesCommand}" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

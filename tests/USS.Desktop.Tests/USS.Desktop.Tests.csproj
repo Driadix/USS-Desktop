@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\USS.Desktop.Application\USS.Desktop.Application.csproj" />
     <ProjectReference Include="..\..\src\USS.Desktop.Domain\USS.Desktop.Domain.csproj" />
     <ProjectReference Include="..\..\src\USS.Desktop.Infrastructure\USS.Desktop.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\USS.Desktop.Updater\USS.Desktop.Updater.csproj" />
   </ItemGroup>
 
 </Project>

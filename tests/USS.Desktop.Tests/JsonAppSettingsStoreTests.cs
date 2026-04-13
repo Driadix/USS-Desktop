@@ -45,6 +45,23 @@ public sealed class JsonAppSettingsStoreTests
         Assert.Equal(settings, reloaded);
     }
 
+    [Fact]
+    public async Task LoadAsync_WhenLegacyFileExists_MigratesSettingsToNewStoragePath()
+    {
+        using var tempDirectory = new TestDirectory();
+        var storagePath = Path.Combine(tempDirectory.Path, "local-app-data", "app-settings.json");
+        var legacyStoragePath = Path.Combine(tempDirectory.Path, "legacy", "uss-data", "app-settings.json");
+        var expectedSettings = new AppSettings(AppLanguage.Russian, AppThemeMode.Dark, AppThemePalette.DarkDefault);
+        var legacyStore = new JsonAppSettingsStore(legacyStoragePath);
+        await legacyStore.SaveAsync(expectedSettings);
+        var store = new JsonAppSettingsStore(storagePath, legacyStoragePath);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal(expectedSettings, settings);
+        Assert.True(File.Exists(storagePath));
+    }
+
     private sealed class TestDirectory : IDisposable
     {
         public TestDirectory()

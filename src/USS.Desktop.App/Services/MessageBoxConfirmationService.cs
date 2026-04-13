@@ -11,4 +11,12 @@ public sealed class MessageBoxConfirmationService : IConfirmationService
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    public void ShowInformation(string title, string message) =>
+        System.Windows.MessageBox.Show(
+            message,
+            title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Information,
+            MessageBoxResult.OK);
 }

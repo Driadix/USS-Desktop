@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using USS.Desktop.Application;
 
 namespace USS.Desktop.App.Services;
 
@@ -73,13 +73,10 @@ internal static class AppLogging
 
     private static string EnsureLogDirectory()
     {
-        var logDirectory = Path.Combine(AppContext.BaseDirectory, "app-logs");
+        var logDirectory = AppDataPaths.LogDirectoryPath();
         Directory.CreateDirectory(logDirectory);
         return logDirectory;
     }
 
-    private static string ResolveVersion() =>
-        Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
-        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
-        ?? "unknown";
+    private static string ResolveVersion() => ApplicationVersionProvider.ResolveDisplayVersion();
 }

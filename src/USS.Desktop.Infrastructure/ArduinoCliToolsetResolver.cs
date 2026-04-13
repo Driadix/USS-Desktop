@@ -6,14 +6,12 @@ namespace USS.Desktop.Infrastructure;
 
 public sealed class ArduinoCliToolsetResolver : IToolsetResolver
 {
-    private const string LocalDataRootEnvironmentVariable = "USS_DESKTOP_LOCAL_DATA_ROOT";
-
     public Task<ToolsetResolution> ResolveAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var applicationRoot = ResolveApplicationRoot();
-        var localDataRoot = ResolveLocalDataRoot(applicationRoot);
+        var localDataRoot = AppDataPaths.ResolveToolsetDataRoot();
         var dataDirectory = Path.Combine(localDataRoot, "arduino-cli", "data");
         var userDirectory = Path.Combine(localDataRoot, "arduino-cli", "user");
 
@@ -26,20 +24,6 @@ public sealed class ArduinoCliToolsetResolver : IToolsetResolver
             : null;
 
         return Task.FromResult(new ToolsetResolution(applicationRoot, cliPath, dataDirectory, userDirectory, failureMessage));
-    }
-
-    private static string ResolveLocalDataRoot(string applicationRoot)
-    {
-        var overrideRoot = Environment.GetEnvironmentVariable(LocalDataRootEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(overrideRoot))
-        {
-            return Path.GetFullPath(Environment.ExpandEnvironmentVariables(overrideRoot));
-        }
-
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return string.IsNullOrWhiteSpace(userProfile)
-            ? Path.Combine(applicationRoot, "uss-data")
-            : Path.Combine(userProfile, ".uss");
     }
 
     private static string ResolveApplicationRoot()

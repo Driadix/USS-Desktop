@@ -62,7 +62,7 @@ The next implementation step after this baseline is:
 
 USS Desktop expects a pinned external toolset under `toolsets/arduino-cli-<version>-win64/`.
 
-Mutable Arduino CLI state is stored under `%USERPROFILE%\.uss\arduino-cli` by default so network releases do not install cores, libraries, downloads, and build cache over SMB. The path is intentionally short for Windows toolchains that are sensitive to long include paths. Set `USS_DESKTOP_LOCAL_DATA_ROOT` to override the local data root.
+User state is stored under `%LocalAppData%\USS Desktop` by default so each Windows user has separate settings, recent projects, logs, and mutable Arduino CLI state. Set `USS_DESKTOP_APP_DATA_ROOT` to override the whole USS Desktop user-data root. Set `USS_DESKTOP_LOCAL_DATA_ROOT` only when Arduino CLI data should live in a different folder.
 
 Download the pinned Arduino CLI release:
 
@@ -82,3 +82,5 @@ Release publishes are self-contained for `win-x64`. Create a GitHub release by p
 git tag v0.1.0
 git push origin v0.1.0
 ```
+
+The GitHub workflow stamps release builds from the tag name and publishes `USS.Desktop-win-x64.zip` with the bundled updater.
