@@ -324,11 +324,7 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
             return null;
         }
 
-        return new Progress<ProcessOutputLine>(line =>
-        {
-            var prefix = line.Kind == ProcessOutputKind.StandardError ? "CLI ERR" : "CLI OUT";
-            outputProgress.Report($"{prefix} | {line.Text}");
-        });
+        return new DirectProcessOutputProgress(outputProgress);
     }
 
     private static void ReportFailure(WorkflowResult failure, IProgress<string>? outputProgress)
@@ -342,6 +338,22 @@ public sealed class ArduinoCliWorkflowService : IArduinoCliWorkflowService
         foreach (var line in failure.Transcript.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             outputProgress.Report($"CLI INFO | {line}");
+        }
+    }
+
+    private sealed class DirectProcessOutputProgress : IProgress<ProcessOutputLine>
+    {
+        private readonly IProgress<string> _outputProgress;
+
+        public DirectProcessOutputProgress(IProgress<string> outputProgress)
+        {
+            _outputProgress = outputProgress;
+        }
+
+        public void Report(ProcessOutputLine line)
+        {
+            var prefix = line.Kind == ProcessOutputKind.StandardError ? "CLI ERR" : "CLI OUT";
+            _outputProgress.Report($"{prefix} | {line.Text}");
         }
     }
 }

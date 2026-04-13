@@ -56,16 +56,55 @@ public sealed class ArduinoCliWorkflowServiceTests
             processRunner,
             new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
 
-        var progressLines = new List<string>();
+        var progress = new CollectingStringProgress();
         var project = CreateManagedProject(tempDirectory.Path);
 
-        var result = await workflowService.CompileAsync(project, new Progress<string>(progressLines.Add));
+        var result = await workflowService.CompileAsync(project, progress);
 
         Assert.True(result.Success);
-        Assert.Contains(progressLines, line => line.StartsWith("CLI CMD | ", StringComparison.Ordinal));
-        Assert.Contains("CLI OUT | Detecting libraries", progressLines);
-        Assert.Contains("CLI ERR | warning: deprecated", progressLines);
-        Assert.Contains("CLI EXIT | code 0", progressLines);
+        Assert.Contains(progress.Lines, line => line.StartsWith("CLI CMD | ", StringComparison.Ordinal));
+        Assert.Contains("CLI OUT | Detecting libraries", progress.Lines);
+        Assert.Contains("CLI ERR | warning: deprecated", progress.Lines);
+        Assert.Contains("CLI EXIT | code 0", progress.Lines);
+    }
+
+    [Fact]
+    public async Task CompileAsync_ReportsProcessOutputWithoutPostingToCurrentSynchronizationContext()
+    {
+        using var tempDirectory = new TestDirectory();
+        var synchronizationContext = new CountingSynchronizationContext();
+        var postedProcessOutput = false;
+        var processRunner = new CapturingProcessRunner(
+            new ProcessExecutionResult(0, "compile ok", string.Empty, TimeSpan.FromSeconds(1)),
+            request =>
+            {
+                var postsBeforeReport = synchronizationContext.PostCount;
+                request.OutputProgress?.Report(new ProcessOutputLine(ProcessOutputKind.StandardOutput, "Direct output"));
+                postedProcessOutput = synchronizationContext.PostCount != postsBeforeReport;
+            });
+
+        var workflowService = new ArduinoCliWorkflowService(
+            new StubToolsetResolver(tempDirectory.Path),
+            processRunner,
+            new StubSerialPortService(Array.Empty<ConnectedSerialPort>()));
+
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+
+        try
+        {
+            var progress = new CollectingStringProgress();
+            var project = CreateManagedProject(tempDirectory.Path);
+            var result = await workflowService.CompileAsync(project, progress);
+
+            Assert.True(result.Success);
+            Assert.False(postedProcessOutput);
+            Assert.Contains("CLI OUT | Direct output", progress.Lines);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
     }
 
     [Fact]
@@ -319,6 +358,29 @@ public sealed class ArduinoCliWorkflowServiceTests
             Requests.Add(request);
             _onRun?.Invoke(request);
             return Task.FromResult(_result);
+        }
+    }
+
+    private sealed class CollectingStringProgress : IProgress<string>
+    {
+        public List<string> Lines { get; } = new();
+
+        public void Report(string value)
+        {
+            Lines.Add(value);
+        }
+    }
+
+    private sealed class CountingSynchronizationContext : SynchronizationContext
+    {
+        private int _postCount;
+
+        public int PostCount => Volatile.Read(ref _postCount);
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _postCount);
+            d(state);
         }
     }
 

@@ -17,6 +17,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private const string UploadOperationKey = "upload";
     private const string CompileAndUploadOperationKey = "compile-upload";
     private const string AutoPortSelection = "AUTO";
+    private const int MaxSessionLogLines = 2000;
+    private static readonly TimeSpan WorkflowLogFlushInterval = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan PortPollingInterval = TimeSpan.FromSeconds(2);
 
     private readonly IProjectWorkspaceService _workspaceService;
@@ -38,6 +40,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _isRefreshingPorts;
     private bool _isSynchronizingPreferenceSelections;
     private bool? _lastUploadPortAvailable;
+    private readonly Queue<string> _sessionLogLines = new();
 
     public MainViewModel(
         IProjectWorkspaceService workspaceService,
@@ -478,11 +481,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var cleanEnabled = UseCleanBuild && !string.Equals(operationKey, UploadOperationKey, StringComparison.Ordinal);
         var verboseEnabled = UseVerboseOutput;
         _activeWorkflowCancellation = new CancellationTokenSource();
+        BatchedLogProgress? progress = null;
         try
         {
             IsBusy = true;
             ActiveOperationLabel = actionLabel;
-            SessionLog = string.Empty;
+            SetSessionLogText(string.Empty);
             ProjectStatus = _localization.Format("Workflow.Status.Running", actionLabel);
             Log.Information(
                 "Workflow starting. Operation={Operation} Clean={Clean} Verbose={Verbose} SelectedPort={SelectedPort}",
@@ -491,9 +495,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 verboseEnabled,
                 SelectedPort);
             AppendLog(_localization.Format("Log.WorkflowStarted", actionLabel));
-            var progress = new Progress<string>(AppendLog);
+            progress = new BatchedLogProgress(this);
             _activeWorkflowTask = workflow(_currentProject, progress, _activeWorkflowCancellation.Token);
             var result = await _activeWorkflowTask;
+            progress.Flush();
             ProjectStatus = LocalizeWorkflowSummary(operationKey, result);
             AppendLog(_localization.Format("Log.WorkflowFinished", actionLabel, ProjectStatus));
 
@@ -508,6 +513,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
+            progress?.Flush();
             ProjectStatus = _localization.Format("Log.WorkflowCancelledStatus", actionLabel);
             AppendLog(_localization.Format("Log.WorkflowCancelled", actionLabel));
             await RefreshCurrentProjectStateAsync(autoDeleteLockIfPresent: true);
@@ -515,12 +521,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception exception)
         {
+            progress?.Flush();
             ProjectStatus = exception.Message;
             AppendLog(_localization.Format("Log.WorkflowFailed", actionLabel, exception.Message));
             Log.Error(exception, "Workflow failed. Operation={Operation}", operationKey);
         }
         finally
         {
+            progress?.Dispose();
             _activeWorkflowTask = null;
             _activeWorkflowCancellation?.Dispose();
             _activeWorkflowCancellation = null;
@@ -630,7 +638,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (!preserveLog)
         {
-            SessionLog = $"{_localization.Format("Log.ProjectOpenedName", project.DisplayName)}{Environment.NewLine}{ProjectStatus}";
+            SetSessionLogText($"{_localization.Format("Log.ProjectOpenedName", project.DisplayName)}{Environment.NewLine}{ProjectStatus}");
         }
     }
 
@@ -810,17 +818,56 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void AppendLog(string message)
     {
         WriteRuntimeLog(message);
-        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-        SessionLog = string.IsNullOrWhiteSpace(SessionLog) || SessionLog == _localization["Log.Empty"]
-            ? line
-            : $"{SessionLog}{Environment.NewLine}{line}";
+        AppendFormattedLogLines(new[] { FormatLogLine(DateTime.Now, message) });
+    }
+
+    private void AppendFormattedLogLines(IReadOnlyList<string> lines)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        if (_sessionLogLines.Count == 1 && _sessionLogLines.Peek() == _localization["Log.Empty"])
+        {
+            _sessionLogLines.Clear();
+        }
+
+        foreach (var line in lines)
+        {
+            _sessionLogLines.Enqueue(line);
+        }
+
+        while (_sessionLogLines.Count > MaxSessionLogLines)
+        {
+            _sessionLogLines.Dequeue();
+        }
+
+        SessionLog = string.Join(Environment.NewLine, _sessionLogLines);
+    }
+
+    private void SetSessionLogText(string text)
+    {
+        _sessionLogLines.Clear();
+        if (!string.IsNullOrEmpty(text))
+        {
+            foreach (var line in text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None))
+            {
+                _sessionLogLines.Enqueue(line);
+            }
+        }
+
+        SessionLog = text;
     }
 
     private void ClearLog()
     {
-        SessionLog = string.Empty;
+        SetSessionLogText(string.Empty);
         Log.Information("Run log cleared.");
     }
+
+    private static string FormatLogLine(DateTime timestamp, string message) =>
+        $"[{timestamp:HH:mm:ss}] {message}";
 
     private static IReadOnlyList<SketchLibraryReference> ParseLibraries(string rawValue)
     {
@@ -1000,7 +1047,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (string.IsNullOrWhiteSpace(SessionLog))
             {
-                SessionLog = _localization["Log.Empty"];
+                SetSessionLogText(_localization["Log.Empty"]);
             }
         }
         else
@@ -1252,6 +1299,106 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _portPollingTimer.Stop();
             _portPollingTimer.Tick -= OnPortPollingTick;
             _portPollingTimer = null;
+        }
+    }
+
+    private sealed class BatchedLogProgress : IProgress<string>, IDisposable
+    {
+        private readonly MainViewModel _owner;
+        private readonly Dispatcher _dispatcher;
+        private readonly DispatcherTimer _timer;
+        private readonly object _gate = new();
+        private readonly List<string> _pendingLines = new();
+        private bool _disposed;
+
+        public BatchedLogProgress(MainViewModel owner)
+        {
+            _owner = owner;
+            _dispatcher = Dispatcher.CurrentDispatcher;
+            _timer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
+            {
+                Interval = WorkflowLogFlushInterval
+            };
+            _timer.Tick += OnTick;
+            _timer.Start();
+        }
+
+        public void Report(string value)
+        {
+            _owner.WriteRuntimeLog(value);
+            var line = FormatLogLine(DateTime.Now, value);
+
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _pendingLines.Add(line);
+            }
+        }
+
+        public void Flush()
+        {
+            var lines = TakePendingLines(markDisposed: false);
+            if (lines.Count == 0)
+            {
+                return;
+            }
+
+            if (_dispatcher.CheckAccess())
+            {
+                _owner.AppendFormattedLogLines(lines);
+                return;
+            }
+
+            _dispatcher.Invoke(() => _owner.AppendFormattedLogLines(lines));
+        }
+
+        public void Dispose()
+        {
+            _timer.Stop();
+            _timer.Tick -= OnTick;
+
+            var lines = TakePendingLines(markDisposed: true);
+            if (lines.Count == 0)
+            {
+                return;
+            }
+
+            if (_dispatcher.CheckAccess())
+            {
+                _owner.AppendFormattedLogLines(lines);
+                return;
+            }
+
+            _dispatcher.Invoke(() => _owner.AppendFormattedLogLines(lines));
+        }
+
+        private void OnTick(object? sender, EventArgs e)
+        {
+            Flush();
+        }
+
+        private IReadOnlyList<string> TakePendingLines(bool markDisposed)
+        {
+            lock (_gate)
+            {
+                if (markDisposed)
+                {
+                    _disposed = true;
+                }
+
+                if (_pendingLines.Count == 0)
+                {
+                    return Array.Empty<string>();
+                }
+
+                var lines = _pendingLines.ToArray();
+                _pendingLines.Clear();
+                return lines;
+            }
         }
     }
 }
