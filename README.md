@@ -62,7 +62,7 @@ The next implementation step after this baseline is:
 
 USS Desktop expects a pinned external toolset under `toolsets/arduino-cli-<version>-win64/`.
 
-User state is stored under `%LocalAppData%\USS Desktop` by default so each Windows user has separate settings, recent projects, logs, and mutable Arduino CLI state. Set `USS_DESKTOP_APP_DATA_ROOT` to override the whole USS Desktop user-data root. Set `USS_DESKTOP_LOCAL_DATA_ROOT` only when Arduino CLI data should live in a different folder.
+User settings, recent projects, and logs are stored under `%LocalAppData%\USS Desktop` by default so each Windows user has separate app state. Mutable Arduino CLI state is stored under `%USERPROFILE%\.uss\arduino-cli` by default to keep toolchain paths short. Set `USS_DESKTOP_APP_DATA_ROOT` to override the USS Desktop user-data root. Set `USS_DESKTOP_LOCAL_DATA_ROOT` only when Arduino CLI data should live in a different folder.
 
 Download the pinned Arduino CLI release:
 

@@ -2,12 +2,6 @@ namespace USS.Desktop.Updater;
 
 public static class UpdatePackageInstaller
 {
-    private static readonly HashSet<string> PreservedDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "uss-data",
-        "app-logs"
-    };
-
     public static void Install(string packageRoot, string appDirectory, string executableName)
     {
         var updateRoot = ResolveUpdateRoot(packageRoot, executableName);
@@ -62,11 +56,6 @@ public static class UpdatePackageInstaller
         foreach (var fileSystemInfo in Directory.EnumerateFileSystemEntries(appDirectory))
         {
             var name = Path.GetFileName(fileSystemInfo);
-            if (Directory.Exists(fileSystemInfo) && PreservedDirectoryNames.Contains(name))
-            {
-                continue;
-            }
-
             var backupPath = Path.Combine(backupRoot, name);
             if (Directory.Exists(fileSystemInfo))
             {
@@ -120,12 +109,6 @@ public static class UpdatePackageInstaller
     {
         foreach (var fileSystemInfo in Directory.EnumerateFileSystemEntries(appDirectory))
         {
-            var name = Path.GetFileName(fileSystemInfo);
-            if (Directory.Exists(fileSystemInfo) && PreservedDirectoryNames.Contains(name))
-            {
-                continue;
-            }
-
             if (Directory.Exists(fileSystemInfo))
             {
                 Directory.Delete(fileSystemInfo, recursive: true);

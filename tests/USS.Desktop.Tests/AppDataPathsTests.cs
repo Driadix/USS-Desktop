@@ -10,14 +10,18 @@ public sealed class AppDataPathsTests
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var root = AppDataPaths.ResolveDefaultRoot();
 
-        if (string.IsNullOrWhiteSpace(localApplicationData))
-        {
-            Assert.Contains("uss-data", root, StringComparison.OrdinalIgnoreCase);
-            return;
-        }
-
         Assert.StartsWith(localApplicationData, root, StringComparison.OrdinalIgnoreCase);
         Assert.EndsWith(AppDataPaths.ProductDirectoryName, root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ResolveDefaultToolsetDataRoot_UsesShortUserProfilePath()
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        var root = AppDataPaths.ResolveDefaultToolsetDataRoot();
+
+        Assert.Equal(Path.Combine(userProfile, ".uss"), root);
     }
 
     [Fact]
@@ -28,5 +32,15 @@ public sealed class AppDataPathsTests
         var settingsPath = AppDataPaths.SettingsFilePath(root);
 
         Assert.Equal(Path.Combine(root, "app-settings.json"), settingsPath);
+    }
+
+    [Fact]
+    public void ResolveToolsetDataRoot_UsesExplicitRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "uss-desktop-tests", Guid.NewGuid().ToString("N"));
+
+        var toolsetDataRoot = AppDataPaths.ResolveToolsetDataRoot(root);
+
+        Assert.Equal(root, toolsetDataRoot);
     }
 }

@@ -6,7 +6,7 @@ namespace USS.Desktop.Tests;
 public sealed class UpdatePackageInstallerTests
 {
     [Fact]
-    public async Task Install_ReplacesApplicationFilesAndPreservesLocalStateDirectories()
+    public async Task Install_ReplacesApplicationFiles()
     {
         using var tempDirectory = new TestDirectory();
         var appDirectory = Path.Combine(tempDirectory.Path, "app");
@@ -16,10 +16,6 @@ public sealed class UpdatePackageInstallerTests
 
         await File.WriteAllTextAsync(Path.Combine(appDirectory, "USS.Desktop.App.exe"), "old app");
         await File.WriteAllTextAsync(Path.Combine(appDirectory, "old.dll"), "old dll");
-        Directory.CreateDirectory(Path.Combine(appDirectory, "uss-data"));
-        Directory.CreateDirectory(Path.Combine(appDirectory, "app-logs"));
-        await File.WriteAllTextAsync(Path.Combine(appDirectory, "uss-data", "app-settings.json"), "settings");
-        await File.WriteAllTextAsync(Path.Combine(appDirectory, "app-logs", "startup.log"), "log");
 
         await File.WriteAllTextAsync(Path.Combine(packageRoot, "USS.Desktop.App.exe"), "new app");
         await File.WriteAllTextAsync(Path.Combine(packageRoot, "new.dll"), "new dll");
@@ -32,8 +28,6 @@ public sealed class UpdatePackageInstallerTests
         Assert.Equal("new dll", await File.ReadAllTextAsync(Path.Combine(appDirectory, "new.dll")));
         Assert.Equal("tool", await File.ReadAllTextAsync(Path.Combine(appDirectory, "toolsets", "arduino-cli.exe")));
         Assert.False(File.Exists(Path.Combine(appDirectory, "old.dll")));
-        Assert.Equal("settings", await File.ReadAllTextAsync(Path.Combine(appDirectory, "uss-data", "app-settings.json")));
-        Assert.Equal("log", await File.ReadAllTextAsync(Path.Combine(appDirectory, "app-logs", "startup.log")));
     }
 
     [Fact]

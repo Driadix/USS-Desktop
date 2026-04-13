@@ -25,9 +25,12 @@ public static class AppDataPaths
     public static string ResolveDefaultRoot()
     {
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return string.IsNullOrWhiteSpace(localApplicationData)
-            ? Path.Combine(AppContext.BaseDirectory, "uss-data")
-            : Path.Combine(localApplicationData, ProductDirectoryName);
+        if (string.IsNullOrWhiteSpace(localApplicationData))
+        {
+            throw new InvalidOperationException("Local application data folder is not available.");
+        }
+
+        return Path.Combine(localApplicationData, ProductDirectoryName);
     }
 
     public static string SettingsFilePath(string? rootOverride = null) =>
@@ -53,6 +56,17 @@ public static class AppDataPaths
             return Path.GetFullPath(Environment.ExpandEnvironmentVariables(configuredRoot));
         }
 
-        return ResolveRoot();
+        return ResolveDefaultToolsetDataRoot();
+    }
+
+    public static string ResolveDefaultToolsetDataRoot()
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            throw new InvalidOperationException("User profile folder is not available.");
+        }
+
+        return Path.Combine(userProfile, ".uss");
     }
 }
