@@ -6,7 +6,7 @@ public static class AppDataPaths
 {
     public const string AppDataRootEnvironmentVariable = "USS_DESKTOP_APP_DATA_ROOT";
     public const string ToolsetDataRootEnvironmentVariable = "USS_DESKTOP_LOCAL_DATA_ROOT";
-    public const string ProductDirectoryName = "USS Desktop";
+    public const string ProductDirectoryName = "USSDesktop";
 
     public static string ResolveRoot(string? rootOverride = null)
     {

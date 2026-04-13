@@ -58,6 +58,12 @@ public sealed record UpdaterOptions(
             return false;
         }
 
+        if (string.IsNullOrWhiteSpace(Sha256Digest))
+        {
+            message = "SHA-256 digest is missing.";
+            return false;
+        }
+
         message = string.Empty;
         return true;
     }

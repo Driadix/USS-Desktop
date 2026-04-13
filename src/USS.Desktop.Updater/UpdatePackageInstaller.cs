@@ -2,6 +2,8 @@ namespace USS.Desktop.Updater;
 
 public static class UpdatePackageInstaller
 {
+    private const string BackupDirectoryPrefix = ".USS.Desktop.UpdateBackup-";
+
     public static void Install(string packageRoot, string appDirectory, string executableName)
     {
         var updateRoot = ResolveUpdateRoot(packageRoot, executableName);
@@ -30,10 +32,9 @@ public static class UpdatePackageInstaller
 
     private static string CreateBackupRoot(string appDirectory)
     {
-        var parentDirectory = Directory.GetParent(appDirectory)
-            ?? throw new InvalidOperationException("Application directory must have a parent directory for update backup.");
+        DeleteStaleBackupDirectories(appDirectory);
 
-        var backupRoot = Path.Combine(parentDirectory.FullName, $".USS.Desktop.UpdateBackup-{Guid.NewGuid():N}");
+        var backupRoot = Path.Combine(appDirectory, $"{BackupDirectoryPrefix}{Guid.NewGuid():N}");
         Directory.CreateDirectory(backupRoot);
         return backupRoot;
     }
@@ -62,9 +63,14 @@ public static class UpdatePackageInstaller
 
     private static void MoveCurrentApplicationToBackup(string appDirectory, string backupRoot)
     {
-        foreach (var fileSystemInfo in Directory.EnumerateFileSystemEntries(appDirectory))
+        foreach (var fileSystemInfo in Directory.EnumerateFileSystemEntries(appDirectory).ToArray())
         {
             var name = Path.GetFileName(fileSystemInfo);
+            if (IsBackupDirectory(fileSystemInfo))
+            {
+                continue;
+            }
+
             var backupPath = Path.Combine(backupRoot, name);
             if (Directory.Exists(fileSystemInfo))
             {
@@ -116,8 +122,13 @@ public static class UpdatePackageInstaller
 
     private static void DeleteReplaceableEntries(string appDirectory)
     {
-        foreach (var fileSystemInfo in Directory.EnumerateFileSystemEntries(appDirectory))
+        foreach (var fileSystemInfo in Directory.EnumerateFileSystemEntries(appDirectory).ToArray())
         {
+            if (IsBackupDirectory(fileSystemInfo))
+            {
+                continue;
+            }
+
             if (Directory.Exists(fileSystemInfo))
             {
                 Directory.Delete(fileSystemInfo, recursive: true);
@@ -128,6 +139,18 @@ public static class UpdatePackageInstaller
             }
         }
     }
+
+    private static void DeleteStaleBackupDirectories(string appDirectory)
+    {
+        foreach (var backupDirectory in Directory.EnumerateDirectories(appDirectory, $"{BackupDirectoryPrefix}*"))
+        {
+            TryDeleteDirectory(backupDirectory);
+        }
+    }
+
+    private static bool IsBackupDirectory(string path) =>
+        Directory.Exists(path)
+        && Path.GetFileName(path).StartsWith(BackupDirectoryPrefix, StringComparison.OrdinalIgnoreCase);
 
     private static void TryDeleteDirectory(string path)
     {

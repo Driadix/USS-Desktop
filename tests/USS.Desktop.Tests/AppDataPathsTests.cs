@@ -11,7 +11,8 @@ public sealed class AppDataPathsTests
         var root = AppDataPaths.ResolveDefaultRoot();
 
         Assert.StartsWith(localApplicationData, root, StringComparison.OrdinalIgnoreCase);
-        Assert.EndsWith(AppDataPaths.ProductDirectoryName, root, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("USSDesktop", root, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(' ', AppDataPaths.ProductDirectoryName);
     }
 
     [Fact]

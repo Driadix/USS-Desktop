@@ -53,6 +53,11 @@ public sealed class GitHubUpdateService : IUpdateService
                 return UpdateCheckResult.Failed(normalizedCurrentVersion, $"Latest release tag '{latestRelease.TagName}' is not a semantic version.");
             }
 
+            if (ApplicationVersion.Normalize(latestVersion).CompareTo(normalizedCurrentVersion) <= 0)
+            {
+                return UpdateCheckResult.UpToDate(normalizedCurrentVersion, $"USS Desktop is already up to date at {ApplicationVersion.FormatForDisplay(normalizedCurrentVersion)}.");
+            }
+
             var assets = latestRelease.Assets ?? Array.Empty<GitHubReleaseAsset>();
             var releaseAsset = assets.FirstOrDefault(asset =>
                 string.Equals(asset.Name, ReleaseAssetName, StringComparison.OrdinalIgnoreCase)
@@ -69,18 +74,18 @@ public sealed class GitHubUpdateService : IUpdateService
                 return UpdateCheckResult.Failed(normalizedCurrentVersion, $"Latest release '{latestRelease.TagName}' contains an invalid URL.");
             }
 
+            if (!IsSha256Digest(releaseAsset.Digest))
+            {
+                return UpdateCheckResult.Failed(normalizedCurrentVersion, $"Latest release '{latestRelease.TagName}' does not contain a valid SHA-256 digest for {ReleaseAssetName}.");
+            }
+
             var release = new ApplicationRelease(
                 latestRelease.TagName ?? string.Empty,
                 latestVersion,
                 releaseAsset.Name ?? ReleaseAssetName,
                 downloadUrl,
                 releasePageUrl,
-                releaseAsset.Digest);
-
-            if (ApplicationVersion.Normalize(latestVersion).CompareTo(normalizedCurrentVersion) <= 0)
-            {
-                return UpdateCheckResult.UpToDate(normalizedCurrentVersion, $"USS Desktop is already up to date at {ApplicationVersion.FormatForDisplay(normalizedCurrentVersion)}.");
-            }
+                releaseAsset.Digest!.Trim());
 
             return UpdateCheckResult.UpdateAvailable(
                 normalizedCurrentVersion,
@@ -113,6 +118,23 @@ public sealed class GitHubUpdateService : IUpdateService
         {
             httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
         }
+    }
+
+    private static bool IsSha256Digest(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var trimmedValue = value.Trim();
+        const string prefix = "sha256:";
+        if (trimmedValue.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            trimmedValue = trimmedValue[prefix.Length..];
+        }
+
+        return trimmedValue.Length == 64 && trimmedValue.All(Uri.IsHexDigit);
     }
 
     private sealed record GitHubRelease(

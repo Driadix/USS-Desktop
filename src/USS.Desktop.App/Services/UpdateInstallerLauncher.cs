@@ -46,11 +46,13 @@ public sealed class UpdateInstallerLauncher : IUpdateInstallerLauncher
         startInfo.ArgumentList.Add("--download-url");
         startInfo.ArgumentList.Add(release.DownloadUrl.AbsoluteUri);
 
-        if (!string.IsNullOrWhiteSpace(release.Sha256Digest))
+        if (string.IsNullOrWhiteSpace(release.Sha256Digest))
         {
-            startInfo.ArgumentList.Add("--sha256");
-            startInfo.ArgumentList.Add(release.Sha256Digest);
+            throw new InvalidOperationException("Update package SHA-256 digest is missing.");
         }
+
+        startInfo.ArgumentList.Add("--sha256");
+        startInfo.ArgumentList.Add(release.Sha256Digest);
 
         Process.Start(startInfo);
     }

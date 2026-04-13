@@ -8,7 +8,7 @@ public static class UpdateDigestVerifier
     {
         if (string.IsNullOrWhiteSpace(expectedSha256Digest))
         {
-            return true;
+            return false;
         }
 
         var expectedDigest = NormalizeSha256Digest(expectedSha256Digest);
