@@ -39,7 +39,7 @@ public sealed class ArduinoCliToolsetResolver : IToolsetResolver
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return string.IsNullOrWhiteSpace(localAppData)
             ? Path.Combine(applicationRoot, "uss-data")
-            : Path.Combine(localAppData, "USS Desktop");
+            : Path.Combine(localAppData, "USSDesktop");
     }
 
     private static string ResolveApplicationRoot()
