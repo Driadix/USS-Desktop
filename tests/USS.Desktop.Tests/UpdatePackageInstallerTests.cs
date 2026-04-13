@@ -28,6 +28,7 @@ public sealed class UpdatePackageInstallerTests
         Assert.Equal("new dll", await File.ReadAllTextAsync(Path.Combine(appDirectory, "new.dll")));
         Assert.Equal("tool", await File.ReadAllTextAsync(Path.Combine(appDirectory, "toolsets", "arduino-cli.exe")));
         Assert.False(File.Exists(Path.Combine(appDirectory, "old.dll")));
+        Assert.Empty(Directory.EnumerateDirectories(tempDirectory.Path, ".USS.Desktop.UpdateBackup-*"));
     }
 
     [Fact]

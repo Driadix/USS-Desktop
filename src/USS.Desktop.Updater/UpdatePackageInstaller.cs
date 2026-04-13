@@ -6,8 +6,7 @@ public static class UpdatePackageInstaller
     {
         var updateRoot = ResolveUpdateRoot(packageRoot, executableName);
         var fullAppDirectory = Path.GetFullPath(appDirectory);
-        var backupRoot = Path.Combine(Path.GetTempPath(), "USS.Desktop.UpdateBackup", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(backupRoot);
+        var backupRoot = CreateBackupRoot(fullAppDirectory);
 
         try
         {
@@ -27,6 +26,16 @@ public static class UpdatePackageInstaller
             RestoreBackup(fullAppDirectory, backupRoot);
             throw;
         }
+    }
+
+    private static string CreateBackupRoot(string appDirectory)
+    {
+        var parentDirectory = Directory.GetParent(appDirectory)
+            ?? throw new InvalidOperationException("Application directory must have a parent directory for update backup.");
+
+        var backupRoot = Path.Combine(parentDirectory.FullName, $".USS.Desktop.UpdateBackup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(backupRoot);
+        return backupRoot;
     }
 
     private static string ResolveUpdateRoot(string packageRoot, string executableName)
