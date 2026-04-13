@@ -51,14 +51,14 @@ jobs:
             $publishVersion = $env:GITHUB_REF_NAME.Substring(1)
           }
 
-          $publishArguments = @(
-            "-Configuration", "Release",
-            "-Runtime", "win-x64",
-            "-Output", $env:PUBLISH_DIR
-          )
+          $publishArguments = @{
+            Configuration = "Release"
+            Runtime = "win-x64"
+            Output = $env:PUBLISH_DIR
+          }
 
           if (-not [string]::IsNullOrWhiteSpace($publishVersion)) {
-            $publishArguments += @("-Version", $publishVersion)
+            $publishArguments["Version"] = $publishVersion
           }
 
           .\scripts\Publish-Portable.ps1 @publishArguments
